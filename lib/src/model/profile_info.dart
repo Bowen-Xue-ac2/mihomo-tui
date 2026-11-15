@@ -162,19 +162,14 @@ class ProfileInfo {
   String? get panelUrl {
     final address = controllerAddress;
     if (address == null) return null;
-    final query = <String, String>{
-      'hostname': address.split(':').first,
-      'port': address.split(':').last,
-      if (secret != null) 'secret': secret!,
-    };
-    if (externalUi != null) {
-      return 'http://$address/ui/';
+    // `external-ui` is served by mihomo itself; otherwise use zashboard.
+    if (externalUi != null) return 'http://$address/ui/';
+    final host = address.split(':').first;
+    final port = address.split(':').last;
+    final query = StringBuffer('hostname=$host&port=$port');
+    if (secret != null && secret!.isNotEmpty) {
+      query.write('&secret=${Uri.encodeQueryComponent(secret!)}');
     }
-    final uri = Uri.https('metacubex.github.io', '/metacubexd/', {
-      'hostname': query['hostname']!,
-      'port': query['port']!,
-      if (query['secret'] != null) 'secret': query['secret']!,
-    });
-    return uri.toString();
+    return 'https://board.zash.run.place/#/setup?$query';
   }
 }

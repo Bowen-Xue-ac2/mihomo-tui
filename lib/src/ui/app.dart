@@ -131,6 +131,7 @@ class App implements AppContext {
   DateTime _systemProxyChecked = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lanAddress;
   DateTime _lanAddressChecked = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _proxyManagedByCore = false;
   final Map<String, MirrorProbe> _mirrorProbes = {};
   final Set<String> _mirrorProbing = {};
   CoreRelease? _releaseCache;
@@ -965,9 +966,9 @@ class App implements AppContext {
     }
     _autostartState = await autostart.state();
     if (_autostartState == AutostartState.enabled) {
-      // The service started the core for us: adopt its pid so the overview
-      // shows a managed process instead of an "external" one.
-      final pid = await autostart.mainPid() ?? core.detectPid();
+      // Adopt only the pid systemd reports for *our* unit: never adopt a
+      // scanned process, it may belong to another tool (mihomo-party etc).
+      final pid = await autostart.mainPid();
       if (pid != null) core.adoptPid(pid);
     }
   }
@@ -1024,8 +1025,17 @@ class App implements AppContext {
     CoreRelease release,
   ) async {
     final before = _coreStatus?.version;
+    final wasRunning = _coreStatus?.running ?? false;
     await _runBusy('更新内核', () async {
       try {
+        if (wasRunning) {
+          // A running core keeps its binary busy; stop it first.
+          _busyLabel = '停止核心~';
+          _dirty = true;
+          await _disableSystemProxyForCore();
+          await core.stop();
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
         _busyLabel = '下载 ${release.assetName}';
         _dirty = true;
         final result = await updater.install(
@@ -1038,19 +1048,19 @@ class App implements AppContext {
             _dirty = true;
           },
         );
-        await _refreshServices();
+        if (wasRunning) {
+          _busyLabel = '重启核心~';
+          _dirty = true;
+          final started = await core.start();
+          await _refreshServices();
+          if (started.isSuccess) await _enableSystemProxyForCore();
+        } else {
+          await _refreshServices();
+        }
         toast(
           '内核已更新：${before ?? '未安装'} -> ${result.version}',
           level: ToastLevel.success,
         );
-        if (_coreStatus?.running == true) {
-          confirm(
-            title: '重启核心',
-            message: '内核已更新，是否重启 mihomo 使其生效？',
-            confirmLabel: '重启',
-            onConfirm: () => unawaited(restartCore()),
-          );
-        }
       } on CoreUpdateException catch (error) {
         toast('更新失败：${error.message}', level: ToastLevel.error);
       } catch (error) {
@@ -1289,6 +1299,7 @@ class App implements AppContext {
           'mihomo 已启动${_coreStatus?.pid == null ? '' : '，pid ${_coreStatus!.pid}'}',
           level: ToastLevel.success,
         );
+        await _enableSystemProxyForCore();
       } else {
         toast('mihomo 启动后退出，请查看「日志」', level: ToastLevel.error);
       }
@@ -1315,6 +1326,7 @@ class App implements AppContext {
   Future<void> _stopCoreNow() async {
     await _runBusy('停止核心', () async {
       final stopped = await core.stop();
+      await _disableSystemProxyForCore();
       await _refreshServices();
       if (stopped) {
         toast('已停止 mihomo', level: ToastLevel.success);
@@ -1322,6 +1334,43 @@ class App implements AppContext {
         toast('没有找到运行中的 mihomo 进程', level: ToastLevel.warning);
       }
     });
+  }
+
+  /// Turns the system proxy on together with the core (skipped when the core
+  /// has no proxy port or the platform does not support it).
+  Future<void> _enableSystemProxyForCore() async {
+    final info = _activeInfo;
+    final port = info?.preferredProxyPort;
+    if (port == null) return;
+    final result = await SystemProxy.enable(
+      httpPort: info?.mixedPort ?? info?.port ?? port,
+      socksPort: info?.socksPort ?? port,
+    );
+    if (!result.ok) return;
+    _proxyManagedByCore = true;
+    _systemProxyState = SystemProxyState.enabled;
+    _systemProxyChecked = DateTime.now();
+    toast('已同时开启系统代理', level: ToastLevel.success);
+    _dirty = true;
+  }
+
+  /// Turns the system proxy off when the core stops — but only if it points at
+  /// our own core (either we enabled it, or the port matches).
+  Future<void> _disableSystemProxyForCore() async {
+    final state = await SystemProxy.currentState();
+    if (state != SystemProxyState.enabled) return;
+    final ourPort = _activeInfo?.preferredProxyPort;
+    final currentPort = await SystemProxy.currentHttpPort();
+    final ours = _proxyManagedByCore ||
+        (ourPort != null && currentPort != null && currentPort == ourPort);
+    if (!ours) return;
+    final result = await SystemProxy.disable();
+    if (!result.ok) return;
+    _proxyManagedByCore = false;
+    _systemProxyState = SystemProxyState.disabled;
+    _systemProxyChecked = DateTime.now();
+    toast('已同时关闭系统代理', level: ToastLevel.success);
+    _dirty = true;
   }
 
   @override
@@ -1823,6 +1872,7 @@ class App implements AppContext {
       socksPort: info?.socksPort ?? port,
     );
     if (result.ok) {
+      _proxyManagedByCore = true;
       _systemProxyState = SystemProxyState.enabled;
       _systemProxyChecked = DateTime.now();
       _dirty = true;
@@ -1838,6 +1888,7 @@ class App implements AppContext {
   Future<void> _disableSystemProxy() async {
     final result = await SystemProxy.disable();
     if (result.ok) {
+      _proxyManagedByCore = false;
       _systemProxyState = SystemProxyState.disabled;
       _systemProxyChecked = DateTime.now();
       _dirty = true;

@@ -346,33 +346,57 @@ class CoreUpdater {
 
     final target = File(targetPath);
     target.parent.createSync(recursive: true);
-    if (target.existsSync()) {
-      try {
-        target.copySync('$targetPath.bak');
-      } catch (_) {}
-    }
-    await target.writeAsBytes(binary, flush: true);
-    if (!Platform.isWindows) {
-      try {
-        Process.runSync('chmod', ['755', target.path]);
-      } catch (_) {}
-    }
 
-    final version = await _probeVersion(target.path);
-    if (version == null) {
-      final backup = File('$targetPath.bak');
-      if (backup.existsSync()) {
+    // Write next to the target and swap it in: a *running* executable cannot
+    // be overwritten in place (ETXTBSY "Text file busy"), but rename(2) over
+    // it is allowed on POSIX and keeps the old inode alive for the process.
+    final temp = File('$targetPath.new');
+    try {
+      if (temp.existsSync()) temp.deleteSync();
+      await temp.writeAsBytes(binary, flush: true);
+      if (!Platform.isWindows) {
         try {
-          backup.copySync(targetPath);
+          Process.runSync('chmod', ['755', temp.path]);
         } catch (_) {}
       }
-      throw CoreUpdateException('下载的内核无法运行，已恢复原文件');
+      final version = await _probeVersion(temp.path);
+      if (version == null) {
+        throw CoreUpdateException('下载的内核无法运行，已保留原文件');
+      }
+      if (target.existsSync()) {
+        try {
+          target.copySync('$targetPath.bak');
+        } catch (_) {}
+      }
+      if (Platform.isWindows && target.existsSync()) {
+        try {
+          target.deleteSync();
+        } on FileSystemException {
+          throw CoreUpdateException('目标内核正在运行，无法替换：请先停止核心再更新');
+        }
+      }
+      try {
+        await temp.rename(targetPath);
+      } on FileSystemException catch (error) {
+        final reason = error.osError?.message ?? error.message;
+        throw CoreUpdateException(
+          reason.toLowerCase().contains('busy')
+              ? '目标内核正在运行，无法替换：请先停止核心再更新'
+              : '替换内核失败：$reason',
+        );
+      }
+      return CoreInstallResult(
+        version: version,
+        path: target.path,
+        bytes: binary.length,
+      );
+    } finally {
+      if (temp.existsSync()) {
+        try {
+          temp.deleteSync();
+        } catch (_) {}
+      }
     }
-    return CoreInstallResult(
-      version: version,
-      path: target.path,
-      bytes: binary.length,
-    );
   }
 
   static Future<String?> _probeVersion(String path) async {

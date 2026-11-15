@@ -526,6 +526,12 @@ Future<int> _updateCore(Runtime runtime, _CliOptions options) async {
   stdout.writeln('  下载源     ${mirror.label}');
   stdout.writeln('  目标路径   $target');
   stdout.writeln('  当前版本   ${await runtime.core.version() ?? '未安装'}');
+  final wasRunning = runtime.core.detectPid() != null;
+  if (wasRunning) {
+    stdout.writeln('  检测到内核正在运行，先停止它再更新');
+    await runtime.core.stop();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
   try {
     stdout.write('  查询最新版本...');
     final release = await updater.latest();
@@ -547,6 +553,14 @@ Future<int> _updateCore(Runtime runtime, _CliOptions options) async {
     );
     if (progressOpen) stdout.writeln();
     stdout.writeln('完成：${result.path}（${result.version}）');
+    if (wasRunning) {
+      final started = await runtime.core.start();
+      stdout.writeln(
+        started.isSuccess
+            ? '已重新启动核心，pid ${started.pid}'
+            : '重新启动失败：${started.error}',
+      );
+    }
     return 0;
   } on CoreUpdateException catch (error) {
     stderr.writeln('更新失败：${error.message}');

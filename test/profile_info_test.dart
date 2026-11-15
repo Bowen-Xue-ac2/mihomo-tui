@@ -73,8 +73,11 @@ void main() {
 external-controller: 127.0.0.1:9090
 secret: s3cret
 ''');
+    expect(hosted.panelUrl, contains('board.zash.run.place'));
     expect(hosted.panelUrl, contains('port=9090'));
     expect(hosted.panelUrl, contains('secret=s3cret'));
+    expect(
+        hosted.panelUrl, startsWith('https://board.zash.run.place/#/setup?'));
   });
 
   test('preferred proxy port falls back through mixed/http/socks', () {

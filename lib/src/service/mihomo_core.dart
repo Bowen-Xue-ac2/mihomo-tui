@@ -251,7 +251,10 @@ class MihomoCore {
       if (_launcher.isAlive(stored)) return (pid: stored, fromFile: true);
       clearPidFile();
     }
-    if (!allowScan) return (pid: null, fromFile: false);
+    // Opt-out for users who do not want other tools' cores to be picked up.
+    if (!allowScan || Platform.environment['MIHOMO_TUI_NO_SCAN'] == '1') {
+      return (pid: null, fromFile: false);
+    }
     final cached = _scannedPid;
     if (cached != null && _launcher.isAlive(cached)) {
       return (pid: cached, fromFile: false);

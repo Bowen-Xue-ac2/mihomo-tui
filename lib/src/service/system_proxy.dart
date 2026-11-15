@@ -39,6 +39,29 @@ class SystemProxy {
     return SystemProxyState.unsupported;
   }
 
+  /// Currently configured HTTP proxy port, if any (used to avoid disabling a
+  /// proxy that another tool installed).
+  static Future<int?> currentHttpPort() async {
+    if (Platform.isLinux) {
+      if (!await _gnomeAvailable()) return null;
+      final output = await _run(
+        'gsettings',
+        ['get', 'org.gnome.system.proxy.http', 'port'],
+      );
+      return int.tryParse(output?.trim() ?? '');
+    }
+    if (Platform.isWindows) {
+      final output = await _run(
+        'reg',
+        ['query', _windowsKey, '/v', 'ProxyServer'],
+      );
+      if (output == null) return null;
+      final match = RegExp(r'(?:https?=)?[^;:\s]+:(\d+)').firstMatch(output);
+      return match == null ? null : int.tryParse(match.group(1)!);
+    }
+    return null;
+  }
+
   static Future<SystemProxyResult> enable({
     required int httpPort,
     int? socksPort,

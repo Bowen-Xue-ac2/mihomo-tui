@@ -104,7 +104,7 @@ class DashboardView extends View {
       _Action(
         '打开控制面板',
         enabled: online,
-        hint: '在浏览器中打开 metacubexd 面板',
+        hint: '在浏览器中打开 zashboard 面板',
         run: () async {
           final url = app.activeInfo?.panelUrl;
           if (url == null) {
