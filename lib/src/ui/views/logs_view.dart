@@ -68,8 +68,10 @@ class LogsView extends View {
 
   bool _sameEntries(List<String> raw) {
     if (raw.length != _entries.length) return false;
-    if (raw.isEmpty) return true;
-    return raw.last == _entries.last.raw && raw.first == _entries.first.raw;
+    for (var i = 0; i < raw.length; i++) {
+      if (raw[i] != _entries[i].raw) return false;
+    }
+    return true;
   }
 
   @override
@@ -101,7 +103,7 @@ class LogsView extends View {
       painter.drawBox(
         area,
         focused: focused,
-        title: '${app.paths.logFile} | ${_mode.label} | $status',
+        title: '核心日志 | ${_mode.label} | $status',
       );
       return;
     }
@@ -168,7 +170,7 @@ class LogsView extends View {
     painter.drawBox(
       area,
       focused: focused,
-      title: '${app.paths.logFile} | ${_mode.label} | $status',
+      title: '核心日志 | ${_mode.label} | $status',
     );
     if (maxScroll > 0 && rows > 2) {
       final barHeight = ((rows / total) * rows).round().clamp(1, rows);

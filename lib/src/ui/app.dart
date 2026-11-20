@@ -62,7 +62,6 @@ class App implements AppContext {
 
   Theme _theme = Theme.dark;
   bool? _lightBackground;
-  int? _terminalBackground;
   String? _hoverId;
 
   @override
@@ -88,8 +87,10 @@ class App implements AppContext {
   late Screen _screen;
   final ScreenRenderer _renderer = ScreenRenderer();
   List<Hit> _hits = const [];
+  Overlay? _paintedOverlay;
   bool _dirty = true;
   bool _exiting = false;
+  bool _editing = false;
 
   Timer? _frameTimer;
   Timer? _tickTimer;
@@ -148,8 +149,8 @@ class App implements AppContext {
   ProfileInfo? _activeInfo;
   String? _activeInfoKey;
 
-  bool _refreshing = false;
-  DateTime _lastProxyFetch = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<void>? _serviceRefresh;
+  bool _refreshRequested = false;
 
   // ---------------------------------------------------------------- lifecycle
 
@@ -214,33 +215,31 @@ class App implements AppContext {
     _renderer
       ..trueColor = terminal.supportsTrueColor
       ..refreshColorMode();
-    terminal.start();
-    terminal.setTitle('$appName $appVersion');
-    _eventSubscription = terminal.events.listen(_onEvent);
-    _watchSignals();
-    _terminalBackground =
-        await terminal.probeBackgroundColor() ?? _backgroundFromEnv();
-    _lightBackground = _terminalBackground == null
-        ? null
-        : Theme.luminance(_terminalBackground!) > 0.55;
-    _rebuildTheme();
-    await _refreshServices();
-    _dirty = true;
-    _render();
-    _frameTimer =
-        Timer.periodic(const Duration(milliseconds: 16), (_) => _onFrame());
-    _tickTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
-      unawaited(_onTick());
-    });
-    await _quitCompleter.future;
-    _frameTimer?.cancel();
-    _tickTimer?.cancel();
-    await _eventSubscription?.cancel();
-    for (final subscription in _signalSubscriptions) {
-      await subscription.cancel();
+    try {
+      terminal.start();
+      terminal.setTitle('$appName $appVersion');
+      _eventSubscription = terminal.events.listen(_onEvent);
+      _watchSignals();
+      await _detectTerminalBackground();
+      _rebuildTheme();
+      _render();
+      unawaited(_refreshServices());
+      _frameTimer =
+          Timer.periodic(const Duration(milliseconds: 16), (_) => _onFrame());
+      _tickTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+        unawaited(_onTick());
+      });
+      await _quitCompleter.future;
+    } finally {
+      _frameTimer?.cancel();
+      _tickTimer?.cancel();
+      await _eventSubscription?.cancel();
+      for (final subscription in _signalSubscriptions) {
+        await subscription.cancel();
+      }
+      _api?.dispose();
+      terminal.stop();
     }
-    _api?.dispose();
-    terminal.stop();
     final farewell = _farewell;
     if (farewell != null) {
       stdout.writeln(farewell);
@@ -296,6 +295,13 @@ class App implements AppContext {
 
   String _colorMode() => _settings.colorMode ?? 'auto';
 
+  Future<void> _detectTerminalBackground() async {
+    final background =
+        await terminal.probeBackgroundColor() ?? _backgroundFromEnv();
+    _lightBackground =
+        background == null ? null : Theme.luminance(background) > 0.55;
+  }
+
   /// Fallback for terminals that do not answer OSC 11 but export COLORFGBG
   /// (e.g. `15;0` for white on black).
   int? _backgroundFromEnv() {
@@ -311,6 +317,7 @@ class App implements AppContext {
   // ------------------------------------------------------------------ drawing
 
   void _onFrame() {
+    if (_editing || _exiting) return;
     final now = DateTime.now();
     if (_busy && now.difference(_lastSpinner).inMilliseconds > 90) {
       _lastSpinner = now;
@@ -327,7 +334,8 @@ class App implements AppContext {
 
   void _render() {
     _dirty = false;
-    _screen.clear();
+    _overlays.removeWhere((overlay) => overlay.isDismissed);
+    _paintedOverlay = _overlays.lastOrNull;
     final p = Painter(_screen, theme);
     final width = _screen.width;
     final height = _screen.height;
@@ -340,6 +348,7 @@ class App implements AppContext {
     }
 
     _drawTopBar(p, width);
+    final compact = width < 76;
     final sidebarWidth = width < 100 ? 20 : 24;
     final sidebarRect = Rect(1, 1, sidebarWidth, height - 2);
     final contentRect = Rect(
@@ -348,13 +357,19 @@ class App implements AppContext {
       width - sidebarWidth - 3,
       height - 2,
     );
-    _drawSidebar(p, sidebarRect);
-    _drawContent(p, contentRect);
+    if (compact) {
+      _drawTabs(p, width);
+      _drawContent(p, Rect(1, 2, width - 2, height - 3));
+    } else {
+      _drawSidebar(p, sidebarRect);
+      _drawContent(p, contentRect);
+    }
     _drawBottomBar(p, width, height);
 
-    _overlays.removeWhere((overlay) => overlay.isDismissed);
-    for (final overlay in _overlays) {
-      overlay.draw(p);
+    final modal = _paintedOverlay;
+    if (modal != null) {
+      p.hits.clear();
+      modal.draw(p);
     }
 
     _hits = List<Hit>.unmodifiable(p.hits);
@@ -363,40 +378,33 @@ class App implements AppContext {
 
   void _drawTopBar(Painter p, int width) {
     p.fill(Rect(0, 0, width, 1), Style(bg: theme.header));
-    var x = 1;
-    x += p.text(
-        x, 0, appName, Style(fg: theme.accent, bg: theme.header, bold: true));
-    x += p.text(
-        x + 1, 0, 'v$appVersion', Style(fg: theme.muted, bg: theme.header));
-    x += 6;
+    final statusStyle = Style(fg: _statusColor(), bg: theme.header, bold: true);
+    final status = truncate(_statusText(), width ~/ 3);
+    final statusX = width - textWidth(status) - 1;
+    p.text(statusX, 0, status, statusStyle);
+    final nameWidth = p.text(
+        1, 0, appName, Style(fg: theme.accent, bg: theme.header, bold: true));
+    final x = nameWidth + 3;
+    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+    final label = _busy
+        ? '${frames[_spinnerFrame]} ${_busyLabel ?? '处理中'}'
+        : repo.activeName ?? 'v$appVersion';
+    p.text(x, 0, truncate(label, statusX - x - 1),
+        Style(fg: _busy ? theme.yellow : theme.muted, bg: theme.header));
+  }
 
-    final right = <(String, Style)>[];
-    if (_busy) {
-      const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
-      right.add((
-        '${frames[_spinnerFrame]} ${_busyLabel ?? '处理中'}',
-        Style(fg: theme.yellow, bg: theme.header),
-      ));
-      right.add(('  ', Style(bg: theme.header)));
-    }
-    right.add((
-      _statusText(),
-      Style(fg: _statusColor(), bg: theme.header, bold: true),
-    ));
-    right.add(('  ', Style(bg: theme.header)));
-    if (repo.activeName != null) {
-      right.add((
-        repo.activeName!,
-        Style(fg: theme.accentSoft, bg: theme.header),
-      ));
-      right.add(('  ', Style(bg: theme.header)));
-    }
-    var rightX = width - 1;
-    for (final item in right.reversed) {
-      final valueWidth = textWidth(item.$1);
-      rightX -= valueWidth;
-      if (rightX < x) break;
-      p.text(rightX, 0, item.$1, item.$2);
+  void _drawTabs(Painter p, int width) {
+    for (var index = 0; index < views.length; index++) {
+      final left = index * width ~/ views.length;
+      final right = (index + 1) * width ~/ views.length;
+      final rect = Rect(left, 1, right - left, 1);
+      final style = index == _viewIndex
+          ? Style(fg: theme.chipText, bg: theme.accent, bold: true)
+          : Style(fg: theme.muted, bg: theme.panel);
+      p.fill(rect, style);
+      p.textAligned(rect, '${index + 1} ${views[index].label}', style,
+          center: true);
+      p.hit(rect, id: 'nav$index', onPress: () => openView(index));
     }
   }
 
@@ -512,8 +520,15 @@ class App implements AppContext {
 
   void _drawBottomBar(Painter p, int width, int height) {
     final y = height - 1;
+    final help = width < 56
+        ? '? 帮助  q 退出'
+        : _sidebarFocused
+            ? 'Tab 内容区  ? 帮助  q 退出'
+            : 'Esc 导航  ? 帮助  q 退出';
+    final helpX = width - textWidth(help) - 1;
     p.fill(Rect(0, y, width, 1), Style(bg: theme.header));
     var x = 1;
+    p.text(helpX, y, help, Style(fg: theme.muted, bg: theme.header));
     final message = _toastMessage;
     if (message != null) {
       final color = switch (_toastLevel) {
@@ -522,15 +537,8 @@ class App implements AppContext {
         ToastLevel.warning => theme.yellow,
         ToastLevel.error => theme.red,
       };
-      p.text(x, y, truncate(message, width - 28),
+      p.text(x, y, truncate(message, helpX - x - 1),
           Style(fg: color, bg: theme.header, bold: true));
-      final rightText =
-          _sidebarFocused ? 'Tab 内容区 | ? 帮助 | q 退出' : 'Esc 侧栏 | ? 帮助 | q 退出';
-      final rightWidth = textWidth(rightText);
-      if (width - rightWidth - 2 > 0) {
-        p.text(width - rightWidth - 1, y, rightText,
-            Style(fg: theme.muted, bg: theme.header));
-      }
       return;
     }
     final view = views[_viewIndex];
@@ -542,29 +550,20 @@ class App implements AppContext {
           ]
         : view.hints(this);
     for (final hint in hints) {
-      if (x + textWidth(hint.keys) + textWidth(hint.label) + 5 > width - 26) {
+      if (x + textWidth(hint.keys) + textWidth(hint.label) + 5 > helpX) {
         break;
       }
-      final keyStyle = Style(fg: theme.chipText, bg: theme.muted, bold: true);
-      x += p.text(x, y, ' ${hint.keys} ', keyStyle);
-      x += p.text(
-          x + 1, y, hint.label, Style(fg: theme.muted, bg: theme.header));
-      x += 2;
-    }
-    final rightText =
-        _sidebarFocused ? 'Tab 内容区 | ? 帮助 | q 退出' : 'Esc 侧栏 | ? 帮助 | q 退出';
-    final rightWidth = textWidth(rightText);
-    if (width - rightWidth - 2 > x) {
-      p.text(width - rightWidth - 1, y, rightText,
-          Style(fg: theme.muted, bg: theme.header));
+      x += p.keyHint(x, y, hint.keys, hint.label);
     }
   }
 
   // ------------------------------------------------------------------- events
 
   void _onEvent(TermEvent event) {
+    if (_editing || _exiting) return;
     switch (event) {
       case ResizeEvent(:final columns, :final rows):
+        _hits = const [];
         _screen.resize(columns, rows);
         _renderer.invalidate();
         _dirty = true;
@@ -578,8 +577,8 @@ class App implements AppContext {
           blue: final blue,
           isBackground: true
         ):
-        _terminalBackground = (red << 16) | (green << 8) | blue;
-        _lightBackground = Theme.luminance(_terminalBackground!) > 0.55;
+        final background = (red << 16) | (green << 8) | blue;
+        _lightBackground = Theme.luminance(background) > 0.55;
         _rebuildTheme();
       case ColorReportEvent():
         break;
@@ -587,6 +586,7 @@ class App implements AppContext {
   }
 
   void _handleKey(KeyEvent event) {
+    _overlays.removeWhere((overlay) => overlay.isDismissed);
     if (_overlays.isNotEmpty) {
       _overlays.last.handleKey(event);
       _dirty = true;
@@ -652,13 +652,8 @@ class App implements AppContext {
   }
 
   void _handleMouse(MouseEvent event) {
-    for (final overlay in _overlays.reversed) {
-      if (overlay.handleMouse(event)) {
-        _dirty = true;
-        return;
-      }
-    }
-    if (_overlays.isNotEmpty) return;
+    final modal = _overlays.lastOrNull;
+    if (modal != _paintedOverlay || modal?.isDismissed == true) return;
 
     if (event.kind == MouseKind.move) {
       _handleHover(event);
@@ -673,19 +668,20 @@ class App implements AppContext {
           return;
         }
       }
-      views[_viewIndex].onWheel(this, event.wheelDelta);
+      if (modal == null) views[_viewIndex].onWheel(this, event.wheelDelta);
       _dirty = true;
       return;
     }
     if (event.kind == MouseKind.press && event.button == MouseButton.left) {
       for (final hit in _hits.reversed) {
-        if (hit.rect.contains(event.x, event.y)) {
-          hit.onPress?.call();
+        if (hit.onPress != null && hit.rect.contains(event.x, event.y)) {
+          hit.onPress!();
           _dirty = true;
           return;
         }
       }
     }
+    if (modal?.handleMouse(event) == true) _dirty = true;
   }
 
   void _handleHover(MouseEvent event) {
@@ -714,8 +710,18 @@ class App implements AppContext {
   }
 
   void _syncView() {
+    _hoverId = null;
+    _tickView();
     _dirty = true;
     unawaited(_refreshServices());
+  }
+
+  void _tickView() {
+    try {
+      views[_viewIndex].onTick(this);
+    } catch (_) {
+      // A failed file read must not interrupt input or status polling.
+    }
   }
 
   void _showHelp() {
@@ -811,6 +817,7 @@ class App implements AppContext {
 
   @override
   void showOverlay(Overlay overlay) {
+    _hoverId = null;
     _overlays.add(overlay);
     _dirty = true;
   }
@@ -846,6 +853,10 @@ class App implements AppContext {
     String label,
     Future<void> Function() action,
   ) async {
+    if (_busy) {
+      toast('请等待当前操作完成', level: ToastLevel.warning);
+      return;
+    }
     _busy = true;
     _busyLabel = label;
     _dirty = true;
@@ -866,31 +877,48 @@ class App implements AppContext {
     _dirty = true;
   }
 
-  Future<void> _refreshServices() async {
-    if (_refreshing) return;
-    _refreshing = true;
-    try {
-      final status = await core.status();
-      _coreStatus = status;
-      _coreStartedAt = null;
-      if (status.running) {
-        final pidFile = File(paths.pidFile);
-        if (pidFile.existsSync()) {
-          try {
-            _coreStartedAt = pidFile.statSync().modified;
-          } catch (_) {}
-        }
-      }
+  Future<void> _refreshServices({bool periodic = false}) {
+    if (_exiting) return Future.value();
+    final pending = _serviceRefresh;
+    if (pending != null) {
+      if (!periodic) _refreshRequested = true;
+      return pending;
+    }
+    return _serviceRefresh = _drainRefreshes();
+  }
 
-      await _refreshActiveInfo();
-      await _refreshApi();
-      await _refreshAutostart();
-      await _refreshSystemProxy();
-      await _refreshLanAddress();
+  Future<void> _drainRefreshes() async {
+    try {
+      do {
+        _refreshRequested = false;
+        await _refreshServiceSnapshot();
+      } while (_refreshRequested && !_exiting);
+    } catch (error) {
+      if (!_exiting) toast('刷新状态失败：$error', level: ToastLevel.error);
     } finally {
-      _refreshing = false;
+      _serviceRefresh = null;
       _dirty = true;
     }
+  }
+
+  Future<void> _refreshServiceSnapshot() async {
+    final status = await core.status();
+    _coreStatus = status;
+    _coreStartedAt = null;
+    if (status.running && status.pidFromFile) {
+      final pidFile = File(paths.pidFile);
+      if (pidFile.existsSync()) {
+        try {
+          _coreStartedAt = pidFile.statSync().modified;
+        } catch (_) {}
+      }
+    }
+
+    await _refreshActiveInfo();
+    await _refreshApi();
+    await _refreshAutostart();
+    await _refreshSystemProxy();
+    await _refreshLanAddress();
   }
 
   Autostart? _autostartOrNull() {
@@ -1204,6 +1232,10 @@ class App implements AppContext {
     final info = _activeInfo;
     final base = info?.apiBase;
     if (base == null) {
+      _api?.dispose();
+      _api = null;
+      _apiKey = null;
+      _apiVersion = null;
       _apiOnline = false;
       _apiConfig = null;
       _proxySnapshot = null;
@@ -1217,39 +1249,59 @@ class App implements AppContext {
       _apiKey = key;
       _apiVersion = null;
       _proxySnapshot = null;
+      _connections = null;
     }
+    final api = _api!;
     try {
-      final api = _api!;
-      _apiVersion ??= await api.version();
       _apiConfig = await api.configs();
-      _apiOnline = true;
-      final needsProxies = (_viewIndex == 0 || _viewIndex == 2) &&
-          DateTime.now().difference(_lastProxyFetch) >
-              const Duration(milliseconds: 900);
-      if (needsProxies) {
-        _proxySnapshot = await api.proxies();
-        _lastProxyFetch = DateTime.now();
-      }
-      if (_viewIndex == 0) {
-        _connections = await api.connections();
-      }
     } on ApiException {
       _apiOnline = false;
       _apiConfig = null;
       _apiVersion = null;
-      if (_viewIndex == 2) _proxySnapshot = null;
+      _proxySnapshot = null;
+      _connections = null;
+      return;
     }
+    _apiOnline = true;
+    _dirty = true;
+    final viewIndex = _viewIndex;
+
+    Future<void> fetchVersion() async {
+      try {
+        _apiVersion = await api.version();
+      } on ApiException {
+        _apiVersion = null;
+      }
+    }
+
+    Future<void> fetchProxies() async {
+      try {
+        _proxySnapshot = await api.proxies();
+      } on ApiException {
+        _proxySnapshot = null;
+      }
+    }
+
+    Future<void> fetchConnections() async {
+      try {
+        _connections = await api.connections();
+      } on ApiException {
+        _connections = null;
+      }
+    }
+
+    await Future.wait([
+      if (_apiVersion == null) fetchVersion(),
+      if (viewIndex == 0 || viewIndex == 2) fetchProxies(),
+      if (viewIndex == 0) fetchConnections(),
+    ]);
   }
 
   Future<void> _onTick() async {
     if (_exiting) return;
     _syncTerminalSize();
-    await _refreshServices();
-    if (_exiting) return;
-    try {
-      views[_viewIndex].onTick(this);
-    } catch (_) {}
-    _dirty = true;
+    _tickView();
+    await _refreshServices(periodic: true);
   }
 
   @override
@@ -1375,19 +1427,21 @@ class App implements AppContext {
 
   @override
   Future<void> restartCore() async {
-    await _runBusy('重启核心', () async {
-      await core.stop();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      final result = await core.start();
-      await _refreshServices();
-      if (result.isSuccess && _coreStatus?.running == true) {
-        toast(
-            'mihomo 已重启${_coreStatus?.pid == null ? '' : '，pid ${_coreStatus!.pid}'}',
-            level: ToastLevel.success);
-      } else {
-        _reportCoreError('重启失败', result.error ?? '未知错误');
-      }
-    });
+    await _runBusy('重启核心', _restartCoreNow);
+  }
+
+  Future<void> _restartCoreNow() async {
+    await core.stop();
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    final result = await core.start();
+    await _refreshServices();
+    if (result.isSuccess && _coreStatus?.running == true) {
+      toast(
+          'mihomo 已重启${_coreStatus?.pid == null ? '' : '，pid ${_coreStatus!.pid}'}',
+          level: ToastLevel.success);
+    } else {
+      _reportCoreError('重启失败', result.error ?? '核心启动后已退出');
+    }
   }
 
   void _reportCoreError(String title, String detail) {
@@ -1596,7 +1650,7 @@ class App implements AppContext {
           _activeInfoKey = null;
           toast('已启用「$name」', level: ToastLevel.success);
           if (start) {
-            await restartCore();
+            await _restartCoreNow();
           }
         }
         await _refreshServices();
@@ -1655,6 +1709,7 @@ class App implements AppContext {
       toast('编辑器命令为空', level: ToastLevel.warning);
       return null;
     }
+    _editing = true;
     terminal.suspend();
     var failure = '';
     try {
@@ -1668,7 +1723,9 @@ class App implements AppContext {
     } on ProcessException catch (error) {
       failure = '无法启动编辑器：${error.message}';
     } finally {
-      terminal.resume();
+      if (!_exiting) terminal.resume();
+      _editing = false;
+      _syncTerminalSize();
       _renderer.invalidate();
       _dirty = true;
     }
@@ -1800,8 +1857,8 @@ class App implements AppContext {
   @override
   Future<void> applySettings(Settings next) async {
     final previous = _settings;
-    _settings = next;
     next.save(paths.settingsFile);
+    _settings = next;
     if (previous.mihomoBin != next.mihomoBin ||
         previous.mihomoHome != next.mihomoHome ||
         previous.editor != next.editor ||
@@ -1833,11 +1890,7 @@ class App implements AppContext {
     final current = _colorMode();
     final next = modes[(modes.indexOf(current) + 1) % modes.length];
     if (next == 'auto') {
-      _terminalBackground =
-          await terminal.probeBackgroundColor() ?? _backgroundFromEnv();
-      _lightBackground = _terminalBackground == null
-          ? null
-          : Theme.luminance(_terminalBackground!) > 0.55;
+      await _detectTerminalBackground();
     }
     await applySettings(_settings.copyWith(colorMode: next));
     toast(

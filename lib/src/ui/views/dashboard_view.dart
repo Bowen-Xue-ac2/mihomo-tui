@@ -155,11 +155,12 @@ class DashboardView extends View {
     final statusRows = _statusRows(app);
     var y = area.y;
 
-    final statusHeight = statusRows.length + 2;
-    if (statusHeight <= area.bottom - y) {
+    final statusCount = math.min(statusRows.length, area.height - 6);
+    if (statusCount > 0) {
+      final statusHeight = statusCount + 2;
       final statusCard = Rect(area.x, y, area.width, statusHeight);
       var rowY = statusCard.y + 1;
-      for (final row in statusRows) {
+      for (final row in statusRows.take(statusCount)) {
         final rowRect = Rect(statusCard.x + 1, rowY, statusCard.width - 2, 1);
         final clickable = row.onPress != null;
         painter.text(
@@ -192,7 +193,7 @@ class DashboardView extends View {
     }
 
     final available = area.bottom - y;
-    if (available >= 4) {
+    if (available >= 3) {
       final maxRows = available - 2;
       _list.bind(total: actions.length, visible: maxRows);
       _list.ensureVisible();

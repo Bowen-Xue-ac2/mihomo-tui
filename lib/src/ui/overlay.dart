@@ -244,16 +244,15 @@ class ConfirmOverlay extends Overlay {
   final bool danger;
 
   Rect? _rect;
-  Rect? _confirmRect;
-  Rect? _cancelRect;
 
   @override
   void draw(Painter painter) {
     final theme = painter.theme;
-    final bodyLines = wrapText(message, 60);
+    final bodyWidth = math.min(64, painter.width - 2) - 6;
+    final bodyLines = wrapText(message, bodyWidth);
     final detailLines = <String>[];
     for (final line in detail) {
-      detailLines.addAll(wrapText(line, 60));
+      detailLines.addAll(wrapText(line, bodyWidth));
     }
     final width = 64;
     final height = 5 +
@@ -271,11 +270,13 @@ class ConfirmOverlay extends Overlay {
 
     var y = rect.y + 2;
     for (final line in bodyLines) {
+      if (y >= rect.bottom - 3) break;
       painter.text(rect.x + 3, y++, line, Style(fg: theme.text));
     }
     if (detailLines.isNotEmpty) {
       y++;
       for (final line in detailLines) {
+        if (y >= rect.bottom - 3) break;
         painter.text(rect.x + 3, y++, line, Style(fg: theme.muted));
       }
     }
@@ -291,16 +292,15 @@ class ConfirmOverlay extends Overlay {
       bold: true,
     );
     final cancelStyle = Style(fg: theme.text, bg: theme.panel);
-    _confirmRect = Rect(x, buttonsY, confirmWidth, 1);
-    painter.fill(_confirmRect!, confirmStyle);
-    painter.textAligned(_confirmRect!, confirmLabel, confirmStyle,
-        center: true);
-    painter.hit(_confirmRect!, id: 'confirm', onPress: _confirm);
+    final confirmRect = Rect(x, buttonsY, confirmWidth, 1);
+    painter.fill(confirmRect, confirmStyle);
+    painter.textAligned(confirmRect, confirmLabel, confirmStyle, center: true);
+    painter.hit(confirmRect, id: 'confirm', onPress: _confirm);
     x += confirmWidth + 3;
-    _cancelRect = Rect(x, buttonsY, cancelWidth, 1);
-    painter.fill(_cancelRect!, cancelStyle);
-    painter.textAligned(_cancelRect!, cancelLabel, cancelStyle, center: true);
-    painter.hit(_cancelRect!, id: 'cancel', onPress: dismiss);
+    final cancelRect = Rect(x, buttonsY, cancelWidth, 1);
+    painter.fill(cancelRect, cancelStyle);
+    painter.textAligned(cancelRect, cancelLabel, cancelStyle, center: true);
+    painter.hit(cancelRect, id: 'cancel', onPress: dismiss);
 
     painter.textAligned(
       Rect(rect.x, rect.bottom - 3, rect.width, 1),
@@ -393,7 +393,8 @@ class FormOverlay extends Overlay {
 
   int _focused = 0;
   String? _error;
-  final _fieldRects = <int, Rect>{};
+  final _fieldRects = <int, (Rect, int)>{};
+  int _firstField = 0;
 
   FormFieldSpec get _current => fields[_focused];
 
@@ -402,30 +403,41 @@ class FormOverlay extends Overlay {
     final theme = painter.theme;
     final width = 70;
     final fieldsHeight = fields.fold<int>(
-        0, (sum, f) => sum + (f.kind == FieldKind.toggle ? 2 : 3));
-    final descHeight = description.length;
-    final height = 5 + fieldsHeight + descHeight + (_error == null ? 0 : 2);
+        0, (sum, f) => sum + (f.kind == FieldKind.toggle ? 1 : 2));
+    final height = 5 + fieldsHeight + description.length;
     final rect = centeredRect(painter.width, painter.height, width, height);
     painter.fill(rect, Style(bg: theme.panelAlt));
-    painter.drawBox(rect, focused: true);
+    painter.drawBox(rect, focused: true, title: title);
+    _fieldRects.clear();
 
     var y = rect.y + 1;
-    painter.text(rect.x + 3, y, title, Style(fg: theme.accent, bold: true));
-    y++;
-    for (final line in description) {
-      painter.text(
-        rect.x + 3,
-        y++,
-        truncate(line, rect.width - 6),
-        Style(fg: theme.muted),
-      );
+    final fieldsBottom = rect.bottom - 3;
+    if (rect.height >= height) {
+      for (final line in description) {
+        painter.text(rect.x + 3, y++, line, Style(fg: theme.muted),
+            maxWidth: rect.width - 6);
+      }
     }
-
-    for (var index = 0; index < fields.length; index++) {
+    int fieldHeight(FormFieldSpec field) =>
+        field.kind == FieldKind.toggle ? 1 : 2;
+    _firstField = math.min(_firstField, _focused);
+    var needed = fields
+        .getRange(_firstField, _focused + 1)
+        .fold(0, (sum, field) => sum + fieldHeight(field));
+    while (needed > fieldsBottom - y && _firstField < _focused) {
+      needed -= fieldHeight(fields[_firstField++]);
+    }
+    painter.hit(
+      Rect(rect.x + 1, y, rect.width - 2, fieldsBottom - y),
+      id: 'form-fields',
+      onWheel: (delta) =>
+          _focused = (_focused + delta).clamp(0, fields.length - 1),
+    );
+    for (var index = _firstField; index < fields.length; index++) {
+      if (y + fieldHeight(fields[index]) > fieldsBottom) break;
       final field = fields[index];
       final focused = index == _focused;
       if (field.kind == FieldKind.toggle) {
-        y++;
         final mark = field.toggle ? '[x]' : '[ ]';
         final style = Style(
           fg: field.toggle ? theme.green : theme.muted,
@@ -451,18 +463,17 @@ class FormOverlay extends Overlay {
         continue;
       }
 
-      y++;
       painter.text(
         rect.x + 3,
         y,
         field.label +
             (field.required ? ' *' : '') +
-            (field.secret ? '（下载时会忽略显示）' : ''),
+            (field.secret ? '（隐藏）' : ''),
         Style(fg: focused ? theme.text : theme.muted, bold: focused),
+        maxWidth: rect.width - 6,
       );
       y++;
       final fieldRect = Rect(rect.x + 3, y, rect.width - 6, 1);
-      _fieldRects[index] = fieldRect;
       painter.fill(
         fieldRect,
         Style(bg: focused ? theme.panel : theme.header),
@@ -471,28 +482,27 @@ class FormOverlay extends Overlay {
           ? '*' * field.input.value.runes.length
           : field.input.value;
       final visibleWidth = fieldRect.width - 2;
-      final valueWidth = textWidth(display);
-      final cursorColumns =
-          field.secret ? field.input.cursor : textWidth(_prefix(field.input));
+      final cursorColumns = field.secret
+          ? field.input.cursor
+          : _columnsBefore(display, field.input.cursor);
       // Horizontal scroll: keep the caret in view so long values can still be
       // edited at the beginning (Ctrl+A / Home scroll back to the start).
-      final maxOffset =
-          valueWidth > visibleWidth ? valueWidth - visibleWidth : 0;
-      final offset =
-          (cursorColumns - visibleWidth + 1).clamp(0, maxOffset).toInt();
+      final minimumOffset = math.max(0, cursorColumns - visibleWidth + 1);
+      var offset = 0;
+      for (final rune in display.runes) {
+        if (offset >= minimumOffset) break;
+        offset += runeWidth(rune);
+      }
+      _fieldRects[index] = (fieldRect, offset);
       final shown = _slice(display, offset, visibleWidth);
       painter.text(fieldRect.x + 1, y, shown, Style(fg: theme.text));
       if (field.input.hasSelection) {
-        final selStart = textWidth(
-          String.fromCharCodes(
-            field.input.value.runes.take(field.input.selectionStart),
-          ),
-        );
-        final selEnd = textWidth(
-          String.fromCharCodes(
-            field.input.value.runes.take(field.input.selectionEnd),
-          ),
-        );
+        final selStart = field.secret
+            ? field.input.selectionStart
+            : _columnsBefore(display, field.input.selectionStart);
+        final selEnd = field.secret
+            ? field.input.selectionEnd
+            : _columnsBefore(display, field.input.selectionEnd);
         final from = math.max(selStart, offset);
         final to = math.min(selEnd, offset + visibleWidth);
         if (from < to) {
@@ -514,7 +524,7 @@ class FormOverlay extends Overlay {
         if (cursorColumn >= 0 && cursorColumn < visibleWidth) {
           final charAt = empty
               ? _charAt(field.hint, 0)
-              : _charAtCursor(display, field.input.cursor);
+              : _charAt(display, field.input.cursor);
           painter.text(
             fieldRect.x + 1 + cursorColumn,
             y,
@@ -523,56 +533,39 @@ class FormOverlay extends Overlay {
           );
         }
       }
-      painter.hit(
-        fieldRect,
-        id: 'field$index',
-        onPress: () {
-          _focused = index;
-          field.input.setCursorFromColumn(0);
-        },
-      );
       y++;
     }
 
     if (_error != null) {
-      y++;
       painter.text(
         rect.x + 3,
-        y,
+        fieldsBottom,
         truncate(_error!, rect.width - 6),
         Style(fg: theme.red, bold: true),
       );
     }
 
     final footerY = rect.bottom - 2;
-    final hintStyle = Style(fg: theme.muted);
-    painter.text(
-      rect.x + 3,
-      footerY,
-      'Tab 切换字段 | Enter $submitLabel | Esc 取消',
-      hintStyle,
-    );
     final buttonWidth = textWidth(submitLabel) + 4;
     final buttonRect =
         Rect(rect.right - buttonWidth - 3, footerY, buttonWidth, 1);
+    painter.text(
+      rect.x + 3,
+      footerY,
+      'Tab 切换  Esc 取消',
+      Style(fg: theme.muted),
+      maxWidth: buttonRect.x - rect.x - 4,
+    );
     final style = theme.buttonStyle(primary: true);
     painter.fill(buttonRect, style);
     painter.textAligned(buttonRect, submitLabel, style, center: true);
     painter.hit(buttonRect, id: 'submit', onPress: _submit);
   }
 
-  String _prefix(TextInput input) {
-    final runes = input.value.runes.toList();
-    return String.fromCharCodes(runes.take(input.cursor));
-  }
+  int _columnsBefore(String value, int index) =>
+      value.runes.take(index).fold(0, (width, rune) => width + runeWidth(rune));
 
   String? _charAt(String display, int cursor) {
-    final runes = display.runes.toList();
-    if (cursor < runes.length) return String.fromCharCode(runes[cursor]);
-    return null;
-  }
-
-  String? _charAtCursor(String display, int cursor) {
     final runes = display.runes.toList();
     if (cursor < runes.length) return String.fromCharCode(runes[cursor]);
     return null;
@@ -720,7 +713,7 @@ class FormOverlay extends Overlay {
 
   void _pasteClipboard(TextInput input) {
     unawaited(Clipboard.read().then((text) {
-      if (text == null || text.isEmpty) return;
+      if (isDismissed || text == null || text.isEmpty) return;
       // Single line fields: turn newlines/tabs into spaces.
       final cleaned = text
           .replaceAll('\r\n', '\n')
@@ -736,10 +729,16 @@ class FormOverlay extends Overlay {
   bool handleMouse(MouseEvent event) {
     if (event.kind == MouseKind.press && event.button == MouseButton.left) {
       for (final entry in _fieldRects.entries) {
-        if (entry.value.contains(event.x, event.y)) {
+        final (rect, offset) = entry.value;
+        if (rect.contains(event.x, event.y)) {
           _focused = entry.key;
           final field = fields[entry.key];
-          field.input.setCursorFromColumn(event.x - entry.value.x - 1);
+          final column = math.max(0, event.x - rect.x - 1) + offset;
+          if (field.secret) {
+            field.input._moveTo(column);
+          } else {
+            field.input.setCursorFromColumn(column);
+          }
           return true;
         }
       }
@@ -948,7 +947,8 @@ class MirrorOverlay extends Overlay {
   final void Function(String id) onSelect;
   final void Function() onRefresh;
 
-  int _selected = 0;
+  late int _selected =
+      math.max(0, coreMirrors.indexWhere((m) => m.id == current));
 
   @override
   String get title => '下载镜像';

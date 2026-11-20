@@ -60,6 +60,18 @@ void main() {
     expect(event.alt, isTrue);
   });
 
+  test('split multibyte Alt input keeps its modifier', () {
+    final events = <TermEvent>[];
+    final decoder = collecting(events);
+    final bytes = utf8.encode('\x1b中');
+    decoder.add(bytes.sublist(0, 2));
+    expect(events, isEmpty);
+    decoder.add(bytes.sublist(2));
+    final event = events.single as KeyEvent;
+    expect(event.char, '中');
+    expect(event.alt, isTrue);
+  });
+
   test('utf8 multibyte characters', () {
     final events = <TermEvent>[];
     final decoder = collecting(events);

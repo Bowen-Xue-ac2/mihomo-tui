@@ -69,8 +69,9 @@ class AnsiInputDecoder {
     }
   }
 
-  bool _parseUtf8Rune() {
-    final byte = _buffer.first;
+  bool _parseUtf8Rune({bool alt = false}) {
+    final start = alt ? 1 : 0;
+    final byte = _buffer[start];
     var length = 1;
     if (byte & 0xe0 == 0xc0) {
       length = 2;
@@ -79,13 +80,13 @@ class AnsiInputDecoder {
     } else if (byte & 0xf8 == 0xf0) {
       length = 4;
     }
-    if (_buffer.length < length) return false;
-    final bytes = _buffer.sublist(0, length);
-    _buffer.removeRange(0, length);
+    final end = start + length;
+    if (_buffer.length < end) return false;
+    final bytes = _buffer.sublist(start, end);
+    _buffer.removeRange(0, end);
     final text = utf8.decode(bytes, allowMalformed: true);
-    if (text.isEmpty) return true;
     for (final rune in text.runes) {
-      emit(KeyEvent(KeyKind.char, char: String.fromCharCode(rune)));
+      emit(KeyEvent(KeyKind.char, char: String.fromCharCode(rune), alt: alt));
     }
     return true;
   }
@@ -104,33 +105,7 @@ class AnsiInputDecoder {
       return true;
     }
     // ESC + printable => alt+char
-    if (second >= 0x20) {
-      _buffer.removeAt(0);
-      if (_buffer.isNotEmpty) {
-        final lead = _buffer.first;
-        var length = 1;
-        if (lead & 0xe0 == 0xc0) {
-          length = 2;
-        } else if (lead & 0xf0 == 0xe0) {
-          length = 3;
-        } else if (lead & 0xf8 == 0xf0) {
-          length = 4;
-        }
-        if (_buffer.length < length) return false;
-        final bytes = _buffer.sublist(0, length);
-        _buffer.removeRange(0, length);
-        final text = utf8.decode(bytes, allowMalformed: true);
-        for (final rune in text.runes) {
-          emit(KeyEvent(
-            KeyKind.char,
-            char: String.fromCharCode(rune),
-            alt: true,
-          ));
-        }
-        return true;
-      }
-      return false;
-    }
+    if (second >= 0x20) return _parseUtf8Rune(alt: true);
     _buffer.removeAt(0);
     emit(const KeyEvent(KeyKind.escape));
     return true;

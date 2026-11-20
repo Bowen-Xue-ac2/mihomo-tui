@@ -18,6 +18,7 @@ import 'view.dart';
 class ProxiesView extends View {
   final ListState _groupList = ListState();
   final ListState _nodeList = ListState();
+  String? _displayedGroup;
   int _pane = 0; // 0 = groups, 1 = nodes
   final Map<String, int?> _delays = {};
   final Set<String> _testing = {};
@@ -79,7 +80,11 @@ class ProxiesView extends View {
       );
       return;
     }
-    if (snapshot == null || snapshot.groups.isEmpty) {
+    if (snapshot == null) {
+      _drawNotice(app, painter, area, '正在获取代理组', ['按 r 刷新代理列表。']);
+      return;
+    }
+    if (snapshot.groups.isEmpty) {
       _drawNotice(
           app, painter, area, '没有可用的代理组', ['控制器已连接，但配置中没有 proxy-groups。']);
       return;
@@ -87,6 +92,10 @@ class ProxiesView extends View {
 
     _groupList.bind(total: snapshot.groups.length, visible: _groupList.visible);
     final group = snapshot.groups[_groupList.selected];
+    if (group.name != _displayedGroup) {
+      _nodeList.reset();
+      _displayedGroup = group.name;
+    }
     final nodes = _orderedNames(snapshot, group);
 
     final leftWidth = (area.width * 0.28).round().clamp(18, 34);
@@ -162,7 +171,7 @@ class ProxiesView extends View {
     _nodeList.bind(total: nodes.length, visible: nodeRows);
     _nodeList.ensureVisible();
     final visibleNodes = math.min(nodeRows, nodes.length - _nodeList.scroll);
-    final delayWidth = 9;
+    final delayWidth = innerRight.width < 24 ? 6 : 9;
     for (var row = 0; row < visibleNodes; row++) {
       final index = _nodeList.scroll + row;
       final name = nodes[index];
@@ -174,11 +183,12 @@ class ProxiesView extends View {
       final style = selected
           ? theme.selectionStyle()
           : Style(fg: theme.text, bg: theme.panel);
+      painter.fill(rowRect, style);
       painter.text(
         rowRect.x,
         rowRect.y,
         selected ? '>' : ' ',
-        Style(fg: theme.accent, bg: theme.panel),
+        Style(fg: theme.accent, bg: style.bg),
       );
       painter.text(
         rowRect.x + 2,
@@ -189,7 +199,7 @@ class ProxiesView extends View {
       painter.text(
         rowRect.x + 4,
         rowRect.y,
-        truncate(name, rowRect.width - delayWidth - 7),
+        truncate(name, rowRect.width - delayWidth - 4),
         Style(
           fg: isNow ? theme.green : (selected ? theme.text : theme.muted),
           bg: style.bg,
@@ -246,17 +256,6 @@ class ProxiesView extends View {
         Style(fg: theme.muted),
       );
     }
-    if (rightRect.height > 4) {
-      painter.text(
-        innerRight.x,
-        rightRect.bottom - 2,
-        truncate(
-          'Enter 选择 | t 测延迟 | T 测速全部 | Tab 切换列',
-          innerRight.width,
-        ),
-        Style(fg: theme.muted),
-      );
-    }
     // Frames last: rows can never punch through the borders.
     painter.drawBox(
       leftRect,
@@ -295,6 +294,10 @@ class ProxiesView extends View {
 
   @override
   bool onKey(AppContext app, KeyEvent event) {
+    if (event.isChar('r')) {
+      unawaited(app.refresh());
+      return true;
+    }
     final snapshot = app.proxySnapshot;
     if (snapshot == null || snapshot.groups.isEmpty) return false;
     _groupList.bind(total: snapshot.groups.length, visible: _groupList.visible);
@@ -308,10 +311,6 @@ class ProxiesView extends View {
     }
     if (event.kind == KeyKind.left) {
       _pane = 0;
-      return true;
-    }
-    if (event.isChar('r')) {
-      unawaited(app.refresh());
       return true;
     }
     if (event.kind == KeyKind.down || event.isChar('j')) {
@@ -414,8 +413,7 @@ class ProxiesView extends View {
 
   Future<void> _testDelay(AppContext app, String name) async {
     final api = app.apiRef;
-    if (api == null) return;
-    _testing.add(name);
+    if (api == null || !_testing.add(name)) return;
     app.requestFrame();
     try {
       final delay = await api.delay(name);
@@ -463,16 +461,21 @@ class ProxiesView extends View {
         final current = index++;
         if (current >= names.length) return;
         final name = names[current];
+        if (!_testing.add(name)) {
+          _testDone++;
+          continue;
+        }
+        app.requestFrame();
         try {
           final delay = await api.delay(name, timeoutMs: 3000);
           _delays[name] = delay ?? 0;
         } on ApiException {
           _delays[name] = 0;
+        } finally {
+          _testing.remove(name);
+          _testDone++;
+          app.requestFrame();
         }
-        _testing.add(name);
-        _testing.remove(name);
-        _testDone++;
-        app.requestFrame();
       }
     }
 

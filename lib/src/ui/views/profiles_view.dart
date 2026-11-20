@@ -76,46 +76,28 @@ class ProfilesView extends View {
     _list.bind(total: profiles.length, visible: maxRows);
     _list.ensureVisible();
 
-    // Column layout: marker | name | nodes | ports | updated | url
-    final nameWidth = (listInner.width * 0.2).round().clamp(10, 20);
-    const nodesWidth = 5;
-    var portsWidth = listInner.width > 92 ? 16 : 12;
-    const trafficWidth = 13;
-    const updatedWidth = 11;
-    var urlWidth = listInner.width -
-        (9 +
-            nameWidth +
-            nodesWidth +
-            portsWidth +
-            trafficWidth +
-            updatedWidth) -
-        1;
-    if (urlWidth < 12) {
-      portsWidth = listInner.width > 70 ? 8 : 6;
-      urlWidth = listInner.width -
-          (9 +
-              nameWidth +
-              nodesWidth +
-              portsWidth +
-              trafficWidth +
-              updatedWidth) -
-          1;
+    final wide = listInner.width >= 76;
+    final showPorts = listInner.width >= 55;
+    final nameWidth = (listInner.width * 0.3).round().clamp(10, 24);
+    final columns = [
+      ('名称', nameWidth),
+      ('节点', 5),
+      if (showPorts) ('端口', wide ? 12 : 8),
+      ('流量', listInner.width < 45 ? 10 : 13),
+      if (wide) ('更新', 11),
+    ];
+    final fixedWidth = columns.fold(2, (sum, column) => sum + column.$2 + 1);
+    if (listInner.width - fixedWidth >= 10) {
+      columns.add(('订阅地址', listInner.width - fixedWidth));
     }
 
     final headerStyle = Style(fg: theme.muted, bg: theme.panel, bold: true);
     final headerY = listInner.y;
     var x = listInner.x + 2;
-    painter.text(x, headerY, padRight('名称', nameWidth), headerStyle);
-    x += nameWidth + 1;
-    painter.text(x, headerY, padLeft('节点', nodesWidth), headerStyle);
-    x += nodesWidth + 1;
-    painter.text(x, headerY, padRight('端口', portsWidth), headerStyle);
-    x += portsWidth + 1;
-    painter.text(x, headerY, padRight('流量', trafficWidth), headerStyle);
-    x += trafficWidth + 1;
-    painter.text(x, headerY, padRight('更新', updatedWidth), headerStyle);
-    x += updatedWidth + 1;
-    painter.text(x, headerY, truncate('订阅地址', urlWidth), headerStyle);
+    for (final (label, width) in columns) {
+      painter.text(x, headerY, label, headerStyle, maxWidth: width);
+      x += width + 1;
+    }
     painter.text(
       listInner.x,
       headerY + 1,
@@ -133,66 +115,40 @@ class ProfilesView extends View {
       final rowRect = Rect(listInner.x, rowY, listInner.width, 1);
       final info = app.repo.cachedInfo(profile.name);
 
-      var columnX = listInner.x;
+      final rowStyle = selected
+          ? theme.selectionStyle()
+          : Style(fg: theme.muted, bg: theme.panel);
+      painter.fill(rowRect, rowStyle);
       painter.text(
-        columnX,
+        rowRect.x,
         rowY,
         selected ? '>' : ' ',
-        Style(fg: theme.accent, bg: theme.panel, bold: selected),
+        Style(fg: theme.accent, bg: rowStyle.bg, bold: selected),
       );
-      columnX += 2;
-      final nameStyle = Style(
-        fg: active ? theme.green : (selected ? theme.text : theme.muted),
-        bg: theme.panel,
-        bold: active || selected,
-      );
-      painter.text(
-        columnX,
-        rowY,
-        padRight(active ? '${profile.name} *' : profile.name, nameWidth),
-        nameStyle,
-      );
-      columnX += nameWidth + 1;
-      final nodes = info?.nodeCount;
-      painter.text(
-        columnX,
-        rowY,
-        padLeft(nodes == null ? '-' : '$nodes', nodesWidth),
-        Style(fg: theme.muted, bg: theme.panel),
-      );
-      columnX += nodesWidth + 1;
-      final ports = info == null || info.portSummary.isEmpty
-          ? '-'
-          : info.portSummary.first;
-      painter.text(
-        columnX,
-        rowY,
-        padRight(truncate(ports, portsWidth - 1), portsWidth),
-        Style(fg: theme.accentSoft, bg: theme.panel),
-      );
-      columnX += portsWidth + 1;
-      painter.text(
-        columnX,
-        rowY,
-        padRight(_trafficCell(profile), trafficWidth),
-        Style(fg: theme.accentSoft, bg: theme.panel),
-      );
-      columnX += trafficWidth + 1;
-      final updated =
-          profile.updatedAt == null ? '-' : formatRelative(profile.updatedAt!);
-      painter.text(
-        columnX,
-        rowY,
-        padRight(truncate(updated, updatedWidth - 1), updatedWidth),
-        Style(fg: theme.muted, bg: theme.panel),
-      );
-      columnX += updatedWidth + 1;
-      painter.text(
-        columnX,
-        rowY,
-        truncate(profile.url, urlWidth),
-        Style(fg: theme.muted, bg: theme.panel),
-      );
+      var columnX = rowRect.x + 2;
+      for (final (label, width) in columns) {
+        final value = switch (label) {
+          '名称' => active ? '* ${profile.name}' : profile.name,
+          '节点' => info?.nodeCount.toString() ?? '-',
+          '端口' => info?.portSummary.firstOrNull ?? '-',
+          '流量' => _trafficCell(profile),
+          '更新' => profile.updatedAt == null
+              ? '-'
+              : formatRelative(profile.updatedAt!),
+          _ => profile.url,
+        };
+        painter.text(
+          columnX,
+          rowY,
+          truncate(value, width),
+          Style(
+            fg: label == '名称' && active ? theme.green : rowStyle.fg,
+            bg: rowStyle.bg,
+            bold: label == '名称' && (active || selected),
+          ),
+        );
+        columnX += width + 1;
+      }
 
       painter.hit(
         rowRect,
