@@ -19,6 +19,14 @@ import '../painter.dart';
 import 'view.dart';
 
 class DashboardView extends View {
+  static const _mark = [
+    '██          ██',
+    '   ██    ██',
+    '      ██',
+    '   ██    ██',
+    '██          ██',
+  ];
+
   final ListState _list = ListState();
 
   @override
@@ -159,6 +167,11 @@ class DashboardView extends View {
     if (statusCount > 0) {
       final statusHeight = statusCount + 2;
       final statusCard = Rect(area.x, y, area.width, statusHeight);
+      final showMark = statusCard.width >= 66 && statusCount >= _mark.length;
+      final markLeft = statusCard.right - 19;
+      final valueLeft = statusCard.x + 13;
+      final valueRight = showMark ? markLeft - 2 : statusCard.right - 3;
+      final valueWidth = valueRight - valueLeft;
       var rowY = statusCard.y + 1;
       for (final row in statusRows.take(statusCount)) {
         final rowRect = Rect(statusCard.x + 1, rowY, statusCard.width - 2, 1);
@@ -170,9 +183,9 @@ class DashboardView extends View {
           Style(fg: theme.muted, bg: theme.panel),
         );
         painter.text(
-          statusCard.x + 2 + 11,
+          valueLeft,
           rowY,
-          truncate(row.value, statusCard.width - 16),
+          truncate(row.value, valueWidth),
           Style(
             fg: row.color ?? theme.text,
             bold: row.bold,
@@ -189,6 +202,13 @@ class DashboardView extends View {
         rowY++;
       }
       painter.drawBox(statusCard, focused: false, title: '核心状态');
+      if (showMark) {
+        final markTop = statusCard.y + 1 + (statusCount - _mark.length) ~/ 2;
+        final markStyle = Style(fg: theme.accent, bg: theme.panel, bold: true);
+        for (var index = 0; index < _mark.length; index++) {
+          painter.text(markLeft, markTop + index, _mark[index], markStyle);
+        }
+      }
       y += statusHeight + 1;
     }
 

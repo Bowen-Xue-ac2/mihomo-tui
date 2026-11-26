@@ -43,6 +43,16 @@ Future<void> main(List<String> arguments) async {
     editorOverride: options.editor,
   );
 
+  final proxyCommand = options.proxyCommand;
+  if (proxyCommand != null) {
+    exitCode = await _runProxyCommand(
+      runtime,
+      proxyCommand,
+      options.proxyArguments,
+    );
+    return;
+  }
+
   if (options.selfTest) {
     exitCode = await _selfTest(runtime);
     return;
@@ -155,6 +165,16 @@ $appName $appVersion — $appDescription
       --import-legacy <目录>
                         导入旧 clash_tui 的数据目录（含 data.json 与 config/）
 
+命令:
+  status [--json]       查询核心状态
+  start | stop | restart
+                        管理核心进程
+  nodes <组名>           列出节点和当前选择
+  use <组名> <节点名>     切换节点并确认结果
+  mode [rule|global|direct]
+                        查询或切换当前运行模式
+  使用 --data、--home 或 --bin 时，请把这些选项放在命令之前。
+
 交互界面快捷键:
   Tab 切换侧栏/内容   ↑↓ 移动    Enter 确认    ? 帮助    q 退出
   1-5 直接切换页面    鼠标点击/滚轮同样可用
@@ -182,6 +202,8 @@ class _CliOptions {
   String? dataDir;
   String? editor;
   String? error;
+  String? proxyCommand;
+  List<String> proxyArguments = const [];
 
   static _CliOptions parse(List<String> arguments) {
     final options = _CliOptions();
@@ -197,6 +219,7 @@ class _CliOptions {
         case '-V':
         case '--version':
           options.version = true;
+        case 'status':
         case '--status':
           options.status = true;
         case '--json':
@@ -229,12 +252,34 @@ class _CliOptions {
           } else {
             index++;
           }
+        case 'start':
         case '--start':
           options.start = true;
+        case 'stop':
         case '--stop':
           options.stop = true;
+        case 'restart':
         case '--restart':
           options.restart = true;
+        case 'nodes':
+        case 'use':
+        case 'mode':
+          final values = arguments.sublist(index + 1);
+          final error = switch (arg) {
+            'nodes' when values.length != 1 => '用法：nodes <组名>',
+            'use' when values.length != 2 => '用法：use <组名> <节点名>',
+            'mode'
+                when values.length > 1 ||
+                    (values.isNotEmpty &&
+                        !const ['rule', 'global', 'direct']
+                            .contains(values.single.toLowerCase())) =>
+              '用法：mode [rule|global|direct]',
+            _ => null,
+          };
+          options.error ??= error;
+          options.proxyCommand = arg;
+          options.proxyArguments = values;
+          return options;
         case '--bin':
           options.binary = nextValue(index);
           if (options.binary == null) {
@@ -279,18 +324,76 @@ class _CliOptions {
   }
 }
 
+ProfileInfo? _readActiveInfo(Runtime runtime) {
+  final configFile = File(runtime.paths.mihomoConfigFile);
+  if (configFile.existsSync()) {
+    try {
+      return ProfileInfo.parse(configFile.readAsStringSync());
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
+
+Future<int> _runProxyCommand(
+  Runtime runtime,
+  String command,
+  List<String> arguments,
+) async {
+  final info = _readActiveInfo(runtime);
+  final base = info?.apiBase;
+  if (base == null) {
+    stderr.writeln('无法从生效配置读取 Mihomo 控制器地址。');
+    return 1;
+  }
+  final api = MihomoApi(baseUrl: base, secret: info?.secret);
+  try {
+    if (command == 'mode') {
+      final target =
+          arguments.isEmpty ? null : arguments.single.toLowerCase();
+      if (target != null) await api.setMode(target);
+      final current = (await api.configs()).mode;
+      if (current == null || (target != null && current != target)) {
+        throw ApiException('无法确认运行模式');
+      }
+      stdout.writeln(current);
+      return 0;
+    }
+
+    final name = arguments.first;
+    final group = (await api.proxies()).nodes[name];
+    if (group == null || !group.isGroup) {
+      throw ApiException('未找到代理组：$name');
+    }
+    if (command == 'nodes') {
+      for (final node in group.all) {
+        stdout.writeln('${group.now == node ? '*' : ' '} $node');
+      }
+      return 0;
+    }
+
+    final node = arguments[1];
+    if (!group.all.contains(node)) {
+      throw ApiException('节点不在该代理组中：$node');
+    }
+    if (group.now != node) await api.select(name, node);
+    final current = (await api.proxies()).nodes[name]?.now;
+    if (current != node) throw ApiException('无法确认节点选择');
+    stdout.writeln('$name → $current');
+    return 0;
+  } on ApiException catch (error) {
+    stderr.writeln('$error');
+    return 1;
+  } finally {
+    api.dispose();
+  }
+}
+
 Future<int> _printStatus(Runtime runtime, {required bool json}) async {
   final status = await runtime.core.status();
   final profile = runtime.repo.activeProfile;
-  final configFile = File(runtime.paths.mihomoConfigFile);
-  ProfileInfo? info;
-  if (configFile.existsSync()) {
-    try {
-      info = ProfileInfo.parse(configFile.readAsStringSync());
-    } catch (_) {
-      info = null;
-    }
-  }
+  final info = _readActiveInfo(runtime);
   var apiOnline = false;
   String? apiVersion;
   if (info?.apiBase != null) {

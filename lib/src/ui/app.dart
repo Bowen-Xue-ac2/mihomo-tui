@@ -250,8 +250,10 @@ class App implements AppContext {
   void _watchSignals() {
     for (final signal in [
       ProcessSignal.sigint,
-      ProcessSignal.sigterm,
-      ProcessSignal.sighup,
+      if (!Platform.isWindows) ...[
+        ProcessSignal.sigterm,
+        ProcessSignal.sighup,
+      ],
     ]) {
       try {
         _signalSubscriptions.add(signal.watch().listen((_) {
@@ -383,7 +385,7 @@ class App implements AppContext {
     final statusX = width - textWidth(status) - 1;
     p.text(statusX, 0, status, statusStyle);
     final nameWidth = p.text(
-        1, 0, appName, Style(fg: theme.accent, bg: theme.header, bold: true));
+        1, 0, 'X', Style(fg: theme.accent, bg: theme.header, bold: true));
     final x = nameWidth + 3;
     const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
     final label = _busy
