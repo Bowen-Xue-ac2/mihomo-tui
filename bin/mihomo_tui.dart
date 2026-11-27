@@ -8,6 +8,7 @@ import 'package:mihomo_tui/src/service/exporter.dart';
 import 'package:mihomo_tui/src/service/mihomo_api.dart';
 import 'package:mihomo_tui/src/service/paths.dart';
 import 'package:mihomo_tui/src/service/runtime.dart';
+import 'package:mihomo_tui/src/service/system_proxy.dart';
 import 'package:mihomo_tui/src/term/terminal.dart';
 import 'package:mihomo_tui/src/util/format.dart';
 import 'package:mihomo_tui/src/ui/app.dart';
@@ -17,7 +18,7 @@ import 'package:yaml/yaml.dart';
 Future<void> main(List<String> arguments) async {
   final options = _CliOptions.parse(arguments);
   if (options.error != null) {
-    stderr.writeln('参数错误：${options.error}');
+    stderr.writeln('Invalid argument: ${options.error}');
     stderr.writeln(_usage);
     exitCode = 64;
     return;
@@ -86,11 +87,12 @@ Future<void> main(List<String> arguments) async {
       final result = await exporter.export(
         destination: exportPath.isEmpty ? null : File(exportPath),
       );
-      stdout.writeln('已导出 ${result.entries.length} 项到 ${result.file.path}');
+      stdout.writeln(
+          'Exported ${result.entries.length} entries to ${result.file.path}');
       stdout.writeln('  ${result.entries.join('\n  ')}');
       exitCode = 0;
     } catch (error) {
-      stderr.writeln('导出失败：$error');
+      stderr.writeln('Export failed: $error');
       exitCode = 1;
     }
     return;
@@ -100,8 +102,8 @@ Future<void> main(List<String> arguments) async {
     runtime.repo.ensureLayout();
     final imported = runtime.repo.importLegacy(legacyDir);
     stdout.writeln(imported == 0
-        ? '没有从 $legacyDir 导入任何订阅'
-        : '已导入 $imported 个订阅到 ${runtime.paths.profilesDir}');
+        ? 'No profiles imported from $legacyDir'
+        : 'Imported $imported profiles into ${runtime.paths.profilesDir}');
     exitCode = imported == 0 ? 1 : 0;
     return;
   }
@@ -118,8 +120,8 @@ Future<void> main(List<String> arguments) async {
 
   final terminal = createTerminal();
   if (!terminal.isInteractive) {
-    stderr.writeln('$appName 需要交互式终端。');
-    stderr.writeln('纯命令行用法请见 $appName --help');
+    stderr.writeln('$appName requires an interactive terminal.');
+    stderr.writeln('Run $appName --help for CLI usage.');
     exitCode = 2;
     return;
   }
@@ -138,46 +140,49 @@ Future<void> main(List<String> arguments) async {
 const String _usage = '''
 $appName $appVersion — $appDescription
 
-用法:
-  $appName [选项]
+Usage:
+  $appName [options]
 
-通用选项:
-  -h, --help            显示本帮助
-  -V, --version         显示版本号
-      --data <目录>     覆盖数据目录（默认 ${'~/.config/mihomo-tui'}）
-      --home <目录>     覆盖 mihomo 配置目录（默认 ~/.config/mihomo）
-      --bin <路径>      指定 mihomo 可执行文件
-      --editor <命令>   指定编辑订阅用的编辑器
+General options:
+  -h, --help            Show help
+  -V, --version         Show version
+      --data <dir>     Override the data directory (default: ~/.config/mihomo-tui)
+      --home <dir>     Override the Mihomo data directory (default: ~/.config/mihomo)
+      --bin <path>      Use this Mihomo executable
+      --editor <Commands>   Set the profile editor
 
-无界面命令（不需要 TTY）:
-      --status          输出核心与配置状态，退出码 0=运行中 1=未运行
-      --json            与 --status 合用，输出 JSON
-      --list            列出全部订阅
-      --info [名称]     输出订阅详情（缺省为当前启用的订阅）
-      --start           启动核心
-      --stop            停止核心
-      --restart         重启核心
-      --selftest        运行内置自检
-      --update-core     从 GitHub 下载/更新 mihomo 内核（自动识别平台与架构）
-      --mirror <id>     配合 --update-core 选择下载镜像：
+Non-interactive options:
+      --status          Show core state; exit 0 if running, 1 if stopped
+      --json            Output JSON with status
+      --list            List profiles
+      --info [Name]     Show the named profile or the active one
+      --start           Start the core
+      --stop            Stop the core
+      --restart         Restart the core
+      --selftest        Run the self-test
+      --update-core     Download a Mihomo core for this platform from GitHub
+      --mirror <id>     Select a download mirror for --update-core
                         direct / ghproxy / gh-proxy / akams
-      --export [路径]   把设置与全部订阅配置打包成 zip（缺省写到主目录）
-      --import-legacy <目录>
-                        导入旧 clash_tui 的数据目录（含 data.json 与 config/）
+      --export [path]   Export profiles and settings to a ZIP in the home directory
+      --import-legacy <dir>
+                        Import legacy clash_tui data with data.json and config/
 
-命令:
-  status [--json]       查询核心状态
+Commands:
+  status [--json]       Show core status
   start | stop | restart
-                        管理核心进程
-  nodes <组名>           列出节点和当前选择
-  use <组名> <节点名>     切换节点并确认结果
+                        Manage the core process
+  nodes <group>           List node numbers, last latency, and current selection
+  use <group> <number>    Select a node by its number in the group
   mode [rule|global|direct]
-                        查询或切换当前运行模式
-  使用 --data、--home 或 --bin 时，请把这些选项放在命令之前。
+                        Show or change the running mode
+  system-proxy [status|on|off]
+                        Manage the system proxy separately from TUN
+  tun [status|on|off]   Manage the running core's TUN adapter
+  Put --data, --home and --bin before the command.
 
-交互界面快捷键:
-  Tab 切换侧栏/内容   ↑↓ 移动    Enter 确认    ? 帮助    q 退出
-  1-5 直接切换页面    鼠标点击/滚轮同样可用
+Interactive keys:
+  Tab focus   ↑↓ navigate   Enter select   ? help   q quit
+  1–5 switch pages   Mouse click and scroll are supported
 ''';
 
 class _CliOptions {
@@ -233,7 +238,7 @@ class _CliOptions {
         case '--mirror':
           options.mirror = nextValue(index);
           if (options.mirror == null) {
-            options.error = '--mirror 需要一个镜像 id';
+            options.error = '--mirror requires a mirror ID';
           } else {
             index++;
           }
@@ -248,7 +253,7 @@ class _CliOptions {
         case '--import-legacy':
           options.importLegacy = nextValue(index);
           if (options.importLegacy == null) {
-            options.error = '--import-legacy 需要一个目录';
+            options.error = '--import-legacy requires a directory';
           } else {
             index++;
           }
@@ -264,16 +269,25 @@ class _CliOptions {
         case 'nodes':
         case 'use':
         case 'mode':
+        case 'system-proxy':
+        case 'tun':
           final values = arguments.sublist(index + 1);
           final error = switch (arg) {
-            'nodes' when values.length != 1 => '用法：nodes <组名>',
-            'use' when values.length != 2 => '用法：use <组名> <节点名>',
+            'nodes' when values.length != 1 => 'Usage: nodes <group>',
+            'use' when values.length != 2 => 'Usage: use <group> <number>',
             'mode'
                 when values.length > 1 ||
                     (values.isNotEmpty &&
                         !const ['rule', 'global', 'direct']
                             .contains(values.single.toLowerCase())) =>
-              '用法：mode [rule|global|direct]',
+              'Usage: mode [rule|global|direct]',
+            'system-proxy' ||
+            'tun'
+                when values.length > 1 ||
+                    (values.isNotEmpty &&
+                        !const ['status', 'on', 'off']
+                            .contains(values.single)) =>
+              'Usage: $arg [status|on|off]',
             _ => null,
           };
           options.error ??= error;
@@ -283,28 +297,28 @@ class _CliOptions {
         case '--bin':
           options.binary = nextValue(index);
           if (options.binary == null) {
-            options.error = '--bin 需要一个路径';
+            options.error = '--bin requires a path';
           } else {
             index++;
           }
         case '--home':
           options.home = nextValue(index);
           if (options.home == null) {
-            options.error = '--home 需要一个目录';
+            options.error = '--home requires a directory';
           } else {
             index++;
           }
         case '--data':
           options.dataDir = nextValue(index);
           if (options.dataDir == null) {
-            options.error = '--data 需要一个目录';
+            options.error = '--data requires a directory';
           } else {
             index++;
           }
         case '--editor':
           options.editor = nextValue(index);
           if (options.editor == null) {
-            options.error = '--editor 需要一个命令';
+            options.error = '--editor requires a command';
           } else {
             index++;
           }
@@ -317,7 +331,7 @@ class _CliOptions {
             options.info = '';
           }
         default:
-          options.error ??= '未知参数 $arg';
+          options.error ??= 'Unknown option $arg';
       }
     }
     return options;
@@ -342,44 +356,71 @@ Future<int> _runProxyCommand(
   List<String> arguments,
 ) async {
   final info = _readActiveInfo(runtime);
+  if (command == 'system-proxy') {
+    return _runSystemProxy(info, arguments.firstOrNull ?? 'status');
+  }
   final base = info?.apiBase;
   if (base == null) {
-    stderr.writeln('无法从生效配置读取 Mihomo 控制器地址。');
+    stderr.writeln(
+        'The active configuration has no usable Mihomo controller address.');
     return 1;
   }
   final api = MihomoApi(baseUrl: base, secret: info?.secret);
   try {
+    if (command == 'tun') {
+      return await _runTun(runtime, api, arguments.firstOrNull ?? 'status');
+    }
     if (command == 'mode') {
-      final target =
-          arguments.isEmpty ? null : arguments.single.toLowerCase();
+      final target = arguments.isEmpty ? null : arguments.single.toLowerCase();
       if (target != null) await api.setMode(target);
       final current = (await api.configs()).mode;
       if (current == null || (target != null && current != target)) {
-        throw ApiException('无法确认运行模式');
+        throw ApiException('Could not verify the current mode.');
       }
       stdout.writeln(current);
       return 0;
     }
 
     final name = arguments.first;
-    final group = (await api.proxies()).nodes[name];
+    final snapshot = await api.proxies();
+    final group = snapshot.nodes[name];
     if (group == null || !group.isGroup) {
-      throw ApiException('未找到代理组：$name');
+      throw ApiException('Proxy group not found: $name');
     }
     if (command == 'nodes') {
-      for (final node in group.all) {
-        stdout.writeln('${group.now == node ? '*' : ' '} $node');
+      final numberWidth = group.all.length.toString().length;
+      stdout.writeln(
+          '  ${'#'.padLeft(numberWidth)}  ${'Latency'.padRight(11)}  Node');
+      for (final (index, name) in group.all.indexed) {
+        final node = snapshot.nodes[name];
+        final latency = switch (node) {
+          ProxyNode(delay: 0) => 'Timeout',
+          ProxyNode(alive: false) => 'Unavailable',
+          ProxyNode(delay: final delay?) when delay > 0 => '$delay ms',
+          _ => 'Untested',
+        };
+        final number = (index + 1).toString().padLeft(numberWidth);
+        final current = group.now == name ? '*' : ' ';
+        stdout.writeln('$current $number  ${latency.padRight(11)}  $name');
       }
       return 0;
     }
 
-    final node = arguments[1];
+    final choice = arguments[1];
+    final number = int.tryParse(choice, radix: 10);
+    if (number != null && (number < 1 || number > group.all.length)) {
+      throw ApiException(
+          'Node number must be between 1 and ${group.all.length}.');
+    }
+    final node = number == null ? choice : group.all[number - 1];
     if (!group.all.contains(node)) {
-      throw ApiException('节点不在该代理组中：$node');
+      throw ApiException('Node is not in this group: $node');
     }
     if (group.now != node) await api.select(name, node);
     final current = (await api.proxies()).nodes[name]?.now;
-    if (current != node) throw ApiException('无法确认节点选择');
+    if (current != node) {
+      throw ApiException('Could not verify the selected node.');
+    }
     stdout.writeln('$name → $current');
     return 0;
   } on ApiException catch (error) {
@@ -387,6 +428,189 @@ Future<int> _runProxyCommand(
     return 1;
   } finally {
     api.dispose();
+  }
+}
+
+Future<int> _runSystemProxy(ProfileInfo? info, String action) async {
+  final port = info?.mixedPort ?? info?.port;
+  final state = await SystemProxy.currentState();
+  final owned = port != null && await SystemProxy.pointsToLoopback(port);
+  if (action == 'status') {
+    stdout.writeln(switch (state) {
+      SystemProxyState.enabled => owned ? 'vpn_x' : 'another app',
+      SystemProxyState.disabled => 'off',
+      _ => state.name,
+    });
+    return 0;
+  }
+  if (state == SystemProxyState.enabled && !owned) {
+    stderr.writeln(
+      'Another app owns the system proxy. Disable it in that app first.',
+    );
+    return 1;
+  }
+  if ((action == 'on' && state == SystemProxyState.enabled) ||
+      (action == 'off' && state == SystemProxyState.disabled)) {
+    stdout.writeln(
+        action == 'on' ? 'System proxy is on.' : 'System proxy is off.');
+    return 0;
+  }
+  if (state != SystemProxyState.enabled && state != SystemProxyState.disabled) {
+    stderr.writeln('The current system proxy state is unavailable.');
+    return 1;
+  }
+  if (action == 'on') {
+    if (port == null || port <= 0) {
+      stderr.writeln('The active configuration has no HTTP proxy port.');
+      return 1;
+    }
+    try {
+      final socket = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        port,
+        timeout: const Duration(seconds: 2),
+      );
+      socket.destroy();
+    } on SocketException {
+      stderr.writeln('The local proxy port is offline. Run vpn_x start first.');
+      return 1;
+    }
+  }
+  final result = action == 'on'
+      ? await SystemProxy.enable(httpPort: port!, socksPort: info?.socksPort)
+      : await SystemProxy.disable();
+  if (!result.ok) {
+    stderr.writeln(result.message);
+    return 1;
+  }
+  final current = await SystemProxy.currentState();
+  final confirmed = action == 'on'
+      ? current == SystemProxyState.enabled &&
+          await SystemProxy.pointsToLoopback(port!)
+      : current == SystemProxyState.disabled;
+  if (!confirmed) {
+    stderr.writeln('Could not verify the system proxy setting.');
+    return 1;
+  }
+  stdout.writeln(result.message);
+  return 0;
+}
+
+const _windowsTunDevice = 'vpn_x';
+
+Future<Set<String>> _windowsTunAdapters() async {
+  final result = await Process.run('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    r'Get-NetAdapter -IncludeHidden -ErrorAction Stop | '
+        r'Where-Object { $_.Status -eq "Up" -and '
+        r'($_.InterfaceDescription -like "Meta Tunnel*" -or $_.Name -eq "vpn_x") } | '
+        r'Select-Object -ExpandProperty Name',
+  ]).timeout(const Duration(seconds: 6));
+  if (result.exitCode != 0) {
+    throw ApiException('Could not check Windows TUN adapters.');
+  }
+  return result.stdout
+      .toString()
+      .split('\n')
+      .map((name) => name.trim().toLowerCase())
+      .where((name) => name.isNotEmpty)
+      .toSet();
+}
+
+Future<int> _runTun(Runtime runtime, MihomoApi api, String action) async {
+  final desired = action == 'on';
+  final device = Platform.isWindows ? _windowsTunDevice : null;
+  if (desired && device != null) {
+    final adapters = await _windowsTunAdapters();
+    final other = adapters.where((name) => name != device).toList();
+    if (other.isNotEmpty) {
+      throw ApiException(
+          'Another Mihomo TUN adapter is active (${other.join(', ')}). Turn it off in its client first.');
+    }
+  }
+  final ApiConfig before;
+  try {
+    before = await api.configs();
+  } on ApiException catch (error) {
+    if (runtime.core.detectPid() == null && error.statusCode == null) {
+      throw ApiException(desired && device != null
+          ? 'Mihomo is stopped. Run vpn_x start in an Administrator terminal first.'
+          : 'Mihomo is stopped.');
+    }
+    rethrow;
+  }
+  final enabled = before.tunEnabled;
+  if (enabled == null) {
+    throw ApiException('The active controller did not report TUN state.');
+  }
+  if (action == 'status') {
+    stdout.writeln(enabled ? 'on (${before.tunDevice ?? 'TUN'})' : 'off');
+    return 0;
+  }
+  if (enabled == desired) {
+    stdout.writeln(desired ? 'TUN is on.' : 'TUN is off.');
+    return 0;
+  }
+  final log = File(runtime.paths.logFile);
+  final logOffset = desired && device != null ? _tunLogOffset(log) : null;
+  await api.setTun(desired, device: desired ? device : null);
+  final current = await api.configs();
+  if (current.tunEnabled != desired) {
+    if (logOffset != null && _tunAccessDenied(log, logOffset)) {
+      throw ApiException(
+          'Windows denied the running Mihomo process access to TUN. Run vpn_x restart in this Administrator terminal, then retry vpn_x tun on.');
+    }
+    throw ApiException(
+        'Could not apply TUN. Check the Mihomo log for details.');
+  }
+  if (desired && device != null) {
+    try {
+      for (var attempt = 0; attempt < 3; attempt++) {
+        if ((await _windowsTunAdapters()).contains(device)) {
+          stdout.writeln('TUN is on ($device).');
+          return 0;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+    } catch (_) {
+      await api.setTun(false);
+      rethrow;
+    }
+    await api.setTun(false);
+    throw ApiException('Windows did not bring up the $device TUN adapter.');
+  }
+  stdout.writeln(desired ? 'TUN is on.' : 'TUN is off.');
+  return 0;
+}
+
+int? _tunLogOffset(File log) {
+  try {
+    return log.existsSync() ? log.lengthSync() : 0;
+  } on FileSystemException {
+    return null;
+  }
+}
+
+bool _tunAccessDenied(File log, int offset) {
+  try {
+    final length = log.lengthSync();
+    if (length <= offset) return false;
+    final start = length - offset > 16384 ? length - 16384 : offset;
+    final handle = log.openSync();
+    try {
+      handle.setPositionSync(start);
+      final text =
+          utf8.decode(handle.readSync(length - start), allowMalformed: true);
+      return RegExp(r'Start TUN listening error:[^\r\n]*Access is denied',
+              caseSensitive: false)
+          .hasMatch(text);
+    } finally {
+      handle.closeSync();
+    }
+  } on FileSystemException {
+    return false;
   }
 }
 
@@ -425,20 +649,20 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
     }));
   } else {
     stdout.writeln('$appName $appVersion (${Platform.operatingSystem} $_arch)');
-    stdout.writeln('  二进制    ${status.binaryPath ?? '未找到'}');
-    stdout.writeln('  核心版本  ${status.version ?? '未知'}');
-    stdout.writeln('  状态      ${status.running ? '运行中' : '未运行'}'
-        '${status.pid == null ? '' : '（pid ${status.pid}）'}');
+    stdout.writeln('  Binary    ${status.binaryPath ?? 'Not found'}');
+    stdout.writeln('  Core version  ${status.version ?? 'Unknown'}');
+    stdout.writeln('  Status      ${status.running ? 'Running' : 'Stopped'}'
+        '${status.pid == null ? '' : '(pid ${status.pid})'}');
     stdout.writeln(
-      '  订阅      ${runtime.repo.activeName ?? '未选择'}'
-      '${profile?.updatedAt == null ? '' : '（更新于 ${formatDateTime(profile!.updatedAt!)}）'}',
+      '  Profile      ${runtime.repo.activeName ?? 'None'}'
+      '${profile?.updatedAt == null ? '' : ' (updated ${formatDateTime(profile!.updatedAt!)})'}',
     );
-    stdout.writeln('  配置      ${runtime.paths.mihomoConfigFile}');
+    stdout.writeln('  Config      ${runtime.paths.mihomoConfigFile}');
     stdout.writeln(
-      '  控制器    ${info?.controllerAddress ?? '未配置'}'
-      '${apiOnline ? ' · 已连接 ${apiVersion ?? ''}' : ''}',
+      '  Controller    ${info?.controllerAddress ?? 'Not configured'}'
+      '${apiOnline ? ' · Connected ${apiVersion ?? ''}' : ''}',
     );
-    stdout.writeln('  数据目录  ${runtime.paths.configDir}');
+    stdout.writeln('  Data directory  ${runtime.paths.configDir}');
   }
   return status.running ? 0 : 1;
 }
@@ -446,10 +670,10 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
 void _printList(Runtime runtime) {
   final profiles = runtime.repo.profiles;
   if (profiles.isEmpty) {
-    stdout.writeln('（还没有订阅）');
+    stdout.writeln('(No profiles)');
     return;
   }
-  stdout.writeln('  名称\t节点\t端口\t更新\t地址');
+  stdout.writeln('  Name\tNodes\tPorts\tUpdated\tURL');
   for (final profile in profiles) {
     final info = runtime.repo.cachedInfo(profile.name);
     final marker = profile.name == runtime.repo.activeName ? '*' : ' ';
@@ -468,40 +692,41 @@ void _printList(Runtime runtime) {
 int _printInfo(Runtime runtime, String name) {
   final target = name.isEmpty ? runtime.repo.activeName : name;
   if (target == null) {
-    stderr.writeln('当前没有启用的订阅，请指定名称：$appName --info <名称>');
+    stderr
+        .writeln('No active profile. Specify one with $appName --info <Name>');
     return 1;
   }
   final profile = runtime.repo.byName(target);
   if (profile == null) {
-    stderr.writeln('未找到订阅「$target」');
+    stderr.writeln('Profile not found: $target');
     return 1;
   }
   final info = runtime.repo.cachedInfo(target);
   final error = runtime.repo.cachedError(target);
-  stdout.writeln('名称      ${profile.name}');
-  stdout.writeln('地址      ${profile.url}');
-  stdout.writeln('文件      ${runtime.repo.profileFile(target)}');
+  stdout.writeln('Name      ${profile.name}');
+  stdout.writeln('URL      ${profile.url}');
+  stdout.writeln('File      ${runtime.repo.profileFile(target)}');
   stdout.writeln(
-    '更新      ${profile.updatedAt == null ? '从未更新' : formatDateTime(profile.updatedAt!)}',
+    'Updated      ${profile.updatedAt == null ? 'Never' : formatDateTime(profile.updatedAt!)}',
   );
   stdout.writeln(
-      '启用      ${profile.name == runtime.repo.activeName ? '是' : '否'}');
+      'Active      ${profile.name == runtime.repo.activeName ? 'Yes' : 'No'}');
   if (error != null) {
-    stdout.writeln('解析失败  $error');
+    stdout.writeln('Parse failed  $error');
     return 1;
   }
   if (info != null) {
-    stdout.writeln('节点      ${info.nodeCount}');
-    stdout.writeln('代理组    ${info.groupCount}');
-    stdout.writeln('规则      ${info.ruleCount}');
-    stdout.writeln('模式      ${info.mode}');
+    stdout.writeln('Nodes      ${info.nodeCount}');
+    stdout.writeln('Groups    ${info.groupCount}');
+    stdout.writeln('Rules      ${info.ruleCount}');
+    stdout.writeln('Mode      ${info.mode}');
     stdout.writeln(
-      '端口      ${info.portSummary.isEmpty ? '未定义' : info.portSummary.join(' · ')}',
+      'Ports      ${info.portSummary.isEmpty ? 'Not set' : info.portSummary.join(' · ')}',
     );
-    stdout.writeln('控制器    ${info.controllerAddress ?? '未定义'}');
-    stdout.writeln('允许局域网 ${info.allowLan ? '是' : '否'}');
-    stdout.writeln('IPv6      ${info.ipv6 ? '是' : '否'}');
-    stdout.writeln('面板      ${info.panelUrl ?? '无'}');
+    stdout.writeln('Controller    ${info.controllerAddress ?? 'Not set'}');
+    stdout.writeln('Allow LAN ${info.allowLan ? 'Yes' : 'No'}');
+    stdout.writeln('IPv6      ${info.ipv6 ? 'Yes' : 'No'}');
+    stdout.writeln('Dashboard      ${info.panelUrl ?? 'None'}');
   }
   return 0;
 }
@@ -513,23 +738,42 @@ Future<int> _control(
   required bool restart,
 }) async {
   if (stop || restart) {
+    final wasRunning = runtime.core.detectPid() != null;
     final stopped = await runtime.core.stop();
-    stdout.writeln(stopped ? '已停止 mihomo' : '没有运行中的 mihomo 进程');
+    if (wasRunning && !stopped) {
+      stderr.writeln(
+          'Could not stop Mihomo. Use an Administrator terminal if it was started with elevated privileges.');
+      return 1;
+    }
+    if (stop && !restart && stopped) {
+      final info = _readActiveInfo(runtime);
+      final port = info?.mixedPort ?? info?.port;
+      if (port != null &&
+          await SystemProxy.currentState() == SystemProxyState.enabled &&
+          await SystemProxy.pointsToLoopback(port)) {
+        final result = await SystemProxy.disable();
+        if (!result.ok) {
+          stderr.writeln(result.message);
+          return 1;
+        }
+      }
+    }
+    stdout.writeln(stopped ? 'Mihomo stopped' : 'No running Mihomo process');
     if (stop && !restart) return stopped ? 0 : 1;
     await Future<void>.delayed(const Duration(milliseconds: 400));
   }
   if (start || restart) {
     if (runtime.repo.activeName == null &&
         !File(runtime.paths.mihomoConfigFile).existsSync()) {
-      stderr.writeln('没有可用的配置，请先在 TUI 中选择订阅');
+      stderr.writeln('Select a profile in the TUI before starting Mihomo.');
       return 1;
     }
     final result = await runtime.core.start();
     if (!result.isSuccess) {
-      stderr.writeln('启动失败：${result.error}');
+      stderr.writeln('Start failed: ${result.error}');
       return 1;
     }
-    stdout.writeln('mihomo 已启动，pid ${result.pid}');
+    stdout.writeln('Mihomo started, PID ${result.pid}');
   }
   return 0;
 }
@@ -578,7 +822,7 @@ rules:
       parsed.nodeCount == 1 &&
           parsed.mixedPort == 7890 &&
           parsed.mode == 'rule',
-      '${parsed.nodeCount} 节点 · 端口 ${parsed.mixedPort}',
+      '${parsed.nodeCount} Nodes · Ports ${parsed.mixedPort}',
     );
   } catch (error) {
     check('config parser', false, '$error');
@@ -604,11 +848,11 @@ rules:
 
   final binary = runtime.core.resolveBinary();
   stdout.writeln(
-    'info  mihomo binary · ${binary ?? '未找到（TUI 里可在设置中指定）'}',
+    'info  mihomo binary · ${binary ?? 'Not found (set it in Settings)'}',
   );
   if (binary != null) {
     final version = await runtime.core.version();
-    stdout.writeln('info  mihomo version · ${version ?? '无法读取'}');
+    stdout.writeln('info  mihomo version · ${version ?? 'Unavailable'}');
   }
   stdout.writeln('info  data dir · ${runtime.paths.configDir}');
   stdout.writeln('info  config dir · ${runtime.paths.mihomoHome}');
@@ -625,20 +869,21 @@ Future<int> _updateCore(Runtime runtime, _CliOptions options) async {
       ? File(options.binary!).absolute.path
       : runtime.core.resolveBinary() ?? CoreUpdater.defaultInstallPath();
   stdout.writeln('$appName $appVersion');
-  stdout.writeln('  平台/架构  ${CoreUpdater.platformLabel}');
-  stdout.writeln('  下载源     ${mirror.label}');
-  stdout.writeln('  目标路径   $target');
-  stdout.writeln('  当前版本   ${await runtime.core.version() ?? '未安装'}');
+  stdout.writeln('  Platform/arch  ${CoreUpdater.platformLabel}');
+  stdout.writeln('  Download source     ${mirror.label}');
+  stdout.writeln('  Target path   $target');
+  stdout.writeln(
+      '  Current version   ${await runtime.core.version() ?? 'Not installed'}');
   final wasRunning = runtime.core.detectPid() != null;
   if (wasRunning) {
-    stdout.writeln('  检测到内核正在运行，先停止它再更新');
+    stdout.writeln('  Stop the core before updating.');
     await runtime.core.stop();
     await Future<void>.delayed(const Duration(milliseconds: 300));
   }
   try {
-    stdout.write('  查询最新版本...');
+    stdout.write('  Looking up latest version...');
     final release = await updater.latest();
-    stdout.writeln(' ${release.tag}（${release.assetName}）');
+    stdout.writeln(' ${release.tag}(${release.assetName})');
     var lastPercent = -1;
     var progressOpen = false;
     final result = await updater.install(
@@ -655,18 +900,18 @@ Future<int> _updateCore(Runtime runtime, _CliOptions options) async {
       },
     );
     if (progressOpen) stdout.writeln();
-    stdout.writeln('完成：${result.path}（${result.version}）');
+    stdout.writeln('Done: ${result.path}(${result.version})');
     if (wasRunning) {
       final started = await runtime.core.start();
       stdout.writeln(
         started.isSuccess
-            ? '已重新启动核心，pid ${started.pid}'
-            : '重新启动失败：${started.error}',
+            ? 'Mihomo restarted, PID ${started.pid}'
+            : 'Restart failed: ${started.error}',
       );
     }
     return 0;
   } on CoreUpdateException catch (error) {
-    stderr.writeln('更新失败：${error.message}');
+    stderr.writeln('Update failed: ${error.message}');
     return 1;
   }
 }

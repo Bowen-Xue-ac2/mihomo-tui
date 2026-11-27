@@ -27,7 +27,7 @@ void main() {
 
   test('accent list covers all presets', () {
     expect(Theme.accentOrder.toSet(), Theme.accents.keys.toSet());
-    expect(Theme.accentLabel('violet'), '紫');
+    expect(Theme.accentLabel('violet'), 'Violet');
   });
 
   test('cursor and hover styles never paint a background', () {

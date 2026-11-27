@@ -122,18 +122,18 @@ class DataExporter {
     addText(
       'README.txt',
       [
-        '$appName $appVersion 数据导出',
-        '导出时间：${DateTime.now()}',
+        '$appName $appVersion Data export',
+        'Exported at ${DateTime.now()}',
         '',
-        '内容：',
-        '  manifest.json        导出信息（版本、平台、路径、当前订阅）',
-        '  settings.json        应用设置（内核路径、编辑器、主题等）',
-        '  data.json            订阅索引（名称、地址、更新时间、当前启用项）',
-        '  profiles/*.yaml      每个订阅的原始配置',
-        '  mihomo/config.yaml   正在使用的核心配置（如果存在）',
+        'Contents',
+        '  manifest.json        Export metadata (version, platform, paths, active profile)',
+        '  settings.json        Application settings (core path, editor, theme)',
+        '  data.json            Profile index (name, URL, last update, active profile)',
+        '  profiles/*.yaml      Original profile configurations',
+        '  mihomo/config.yaml   Active core configuration, when present',
         '',
-        '恢复：把 profiles/*.yaml 与 data.json 放回数据目录，',
-        '或把某一份 yaml 直接当作 mihomo 的 config.yaml 使用。',
+        'Restore profiles/*.yaml and data.json to the data directory.',
+        'You can also use a specific YAML file as the Mihomo config.yaml.',
       ].join('\n'),
     );
 
@@ -141,7 +141,7 @@ class DataExporter {
     try {
       encoded = ZipEncoder().encode(archive);
     } catch (error) {
-      throw StateError('压缩失败：$error');
+      throw StateError('Could not create ZIP: $error');
     }
 
     target.parent.createSync(recursive: true);

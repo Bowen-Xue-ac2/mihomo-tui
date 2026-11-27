@@ -37,15 +37,15 @@ TrafficSummary? summarizeTraffic({
   if (used != null && total != null && total > 0) {
     final remaining = total - used < 0 ? 0 : total - used;
     parts.add(
-      '已用 ${formatBytes(used)} / ${formatBytes(total)} | 剩余 ${formatBytes(remaining)}',
+      'Used ${formatBytes(used)} / ${formatBytes(total)} | Remaining ${formatBytes(remaining)}',
     );
   } else if (used != null) {
-    parts.add('已用 ${formatBytes(used)}');
+    parts.add('Used ${formatBytes(used)}');
   }
   if (expire != null) {
     final days = expire.difference(DateTime.now()).inDays;
     final date = '${expire.year}-${_two(expire.month)}-${_two(expire.day)}';
-    parts.add('到期 $date${days >= 0 ? '（$days 天）' : '（已过期）'}');
+    parts.add('Expires $date${days >= 0 ? ' ($days days)' : ' (expired)'}');
   }
   return TrafficSummary(bar: bar, text: parts.join(' | '), fraction: fraction);
 }

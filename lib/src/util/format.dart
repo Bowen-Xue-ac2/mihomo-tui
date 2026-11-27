@@ -45,11 +45,11 @@ String formatDuration(Duration duration) {
 String formatRelative(DateTime time, {DateTime? now}) {
   final reference = now ?? DateTime.now();
   final delta = reference.difference(time);
-  if (delta.isNegative) return '刚刚';
-  if (delta.inSeconds < 60) return '刚刚';
-  if (delta.inMinutes < 60) return '${delta.inMinutes} 分钟前';
-  if (delta.inHours < 24) return '${delta.inHours} 小时前';
-  if (delta.inDays < 30) return '${delta.inDays} 天前';
+  if (delta.isNegative) return 'Just now';
+  if (delta.inSeconds < 60) return 'Just now';
+  if (delta.inMinutes < 60) return '${delta.inMinutes} min ago';
+  if (delta.inHours < 24) return '${delta.inHours} h ago';
+  if (delta.inDays < 30) return '${delta.inDays} d ago';
   return '${time.year}-${_two(time.month)}-${_two(time.day)}';
 }
 

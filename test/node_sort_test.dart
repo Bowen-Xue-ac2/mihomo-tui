@@ -68,7 +68,7 @@ void main() {
   });
 
   test('modes cycle', () {
-    expect(NodeSortMode.original.label, '默认');
+    expect(NodeSortMode.original.label, 'Default');
     expect(NodeSortMode.original.next, NodeSortMode.delayAsc);
     expect(NodeSortMode.delayAsc.next, NodeSortMode.delayDesc);
     expect(NodeSortMode.delayDesc.next, NodeSortMode.original);

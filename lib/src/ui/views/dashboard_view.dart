@@ -30,18 +30,18 @@ class DashboardView extends View {
   final ListState _list = ListState();
 
   @override
-  String get label => '概览';
+  String get label => 'Overview';
 
   @override
-  String get title => '概览';
+  String get title => 'Overview';
 
   @override
   List<KeyHint> hints(AppContext app) => const [
-        KeyHint('上下', '选择操作'),
-        KeyHint('Enter', '执行'),
-        KeyHint('s', '启动/停止'),
-        KeyHint('R', '重启'),
-        KeyHint('r', '重载配置'),
+        KeyHint('↑↓', 'Select action'),
+        KeyHint('Enter', 'Run'),
+        KeyHint('s', 'Start/stop'),
+        KeyHint('R', 'Restart'),
+        KeyHint('r', 'Reload config'),
       ];
 
   List<_Action> _actions(AppContext app) {
@@ -52,9 +52,11 @@ class DashboardView extends View {
     final allowLan = app.apiConfig?.allowLan;
     return [
       _Action(
-        running ? '停止核心' : '启动核心',
+        running ? 'Stop core' : 'Start core',
         enabled: status?.binaryPath != null,
-        hint: running ? '结束 mihomo 进程' : '以当前配置在后台启动 mihomo',
+        hint: running
+            ? 'Stop the Mihomo process'
+            : 'Start Mihomo in the background with this config',
         run: () async {
           if (running) {
             await app.stopCore();
@@ -64,59 +66,59 @@ class DashboardView extends View {
         },
       ),
       _Action(
-        '重启核心',
+        'Restart core',
         enabled: running,
-        hint: '重新加载配置并重启进程',
+        hint: 'Reload the config and restart Mihomo',
         run: app.restartCore,
       ),
       _Action(
-        '重新加载配置',
+        'Reload config',
         enabled: online,
-        hint: '让运行中的 mihomo 热重载 config.yaml',
+        hint: 'Apply config.yaml to the running core',
         run: app.reloadConfig,
       ),
       for (final item in const ['rule', 'global', 'direct'])
         _Action(
-          '切换模式：$item',
+          'Set mode to $item',
           enabled: online,
-          hint: mode == item ? '当前模式' : '通过控制器切换',
-          marker: mode == item ? '当前' : null,
+          hint: mode == item ? 'Current mode' : 'Apply through the controller',
+          marker: mode == item ? 'Current' : null,
           run: () async => app.setMode(item),
         ),
       _Action(
-        '编辑生效配置',
+        'Edit active config',
         enabled: File(app.paths.mihomoConfigFile).existsSync(),
-        hint: '用编辑器打开核心正在读取的 config.yaml',
+        hint: 'Open the active config.yaml in your editor',
         run: app.editActiveConfig,
       ),
       _Action(
-        '局域网代理',
+        'LAN proxy',
         enabled: online,
-        hint: '允许局域网内其它设备使用本机代理（allow-lan）',
-        marker: allowLan == null ? null : (allowLan ? '已开启' : '已关闭'),
+        hint: 'Allow other devices on this LAN to use the proxy (allow-lan)',
+        marker: allowLan == null ? null : (allowLan ? 'On' : 'Off'),
         markerActive: allowLan == true,
         run: app.toggleAllowLan,
       ),
       _Action(
-        '切换系统代理',
+        'Toggle system proxy',
         enabled: app.activeInfo?.preferredProxyPort != null,
-        hint: '一键写入/撤销 GNOME 或 Windows 系统代理',
+        hint: 'Enable or disable the system proxy',
         marker: switch (app.systemProxyState) {
-          SystemProxyState.enabled => '已开启',
-          SystemProxyState.disabled => '已关闭',
+          SystemProxyState.enabled => 'On',
+          SystemProxyState.disabled => 'Off',
           _ => null,
         },
         markerActive: app.systemProxyState == SystemProxyState.enabled,
         run: app.toggleSystemProxy,
       ),
       _Action(
-        '打开控制面板',
+        'Open dashboard',
         enabled: online,
-        hint: '在浏览器中打开 zashboard 面板',
+        hint: 'Open zashboard in a browser',
         run: () async {
           final url = app.activeInfo?.panelUrl;
           if (url == null) {
-            app.toast('当前配置没有 external-controller，无法打开面板',
+            app.toast('Set external-controller to open the dashboard.',
                 level: ToastLevel.warning);
             return;
           }
@@ -124,9 +126,9 @@ class DashboardView extends View {
         },
       ),
       _Action(
-        '复制代理环境变量',
+        'Copy proxy variables',
         enabled: app.activeInfo?.preferredProxyPort != null,
-        hint: '把 export 命令复制到剪贴板',
+        hint: 'Copy the export commands to the clipboard',
         run: () async {
           final port = app.activeInfo?.preferredProxyPort;
           if (port == null) return;
@@ -136,15 +138,17 @@ class DashboardView extends View {
             'export all_proxy=socks5://127.0.0.1:$port',
           ].join('\n');
           if (app.copyToClipboard(text)) {
-            app.toast('环境变量已复制到剪贴板', level: ToastLevel.success);
+            app.toast('Copied proxy variables to the clipboard.',
+                level: ToastLevel.success);
           } else {
-            app.toast('未找到剪贴板工具，请手动复制环境变量', level: ToastLevel.warning);
+            app.toast('Clipboard unavailable. Copy the variables manually.',
+                level: ToastLevel.warning);
           }
         },
       ),
       _Action(
-        '刷新状态',
-        hint: '重新探测进程与控制器',
+        'Refresh status',
+        hint: 'Check the process and controller again',
         run: app.refresh,
       ),
     ];
@@ -169,7 +173,7 @@ class DashboardView extends View {
       final statusCard = Rect(area.x, y, area.width, statusHeight);
       final showMark = statusCard.width >= 66 && statusCount >= _mark.length;
       final markLeft = statusCard.right - 19;
-      final valueLeft = statusCard.x + 13;
+      final valueLeft = statusCard.x + 16;
       final valueRight = showMark ? markLeft - 2 : statusCard.right - 3;
       final valueWidth = valueRight - valueLeft;
       var rowY = statusCard.y + 1;
@@ -201,7 +205,7 @@ class DashboardView extends View {
         }
         rowY++;
       }
-      painter.drawBox(statusCard, focused: false, title: '核心状态');
+      painter.drawBox(statusCard, focused: false, title: 'Core status');
       if (showMark) {
         final markTop = statusCard.y + 1 + (statusCount - _mark.length) ~/ 2;
         final markStyle = Style(fg: theme.accent, bg: theme.panel, bold: true);
@@ -283,7 +287,7 @@ class DashboardView extends View {
       painter.drawBox(
         card,
         focused: focused,
-        title: '快捷操作',
+        title: 'Quick actions',
         borderStyle: Style(
           fg: focused ? theme.borderFocus : theme.border,
           bg: theme.panel,
@@ -299,22 +303,15 @@ class DashboardView extends View {
   }
 
   String _disabledReason(AppContext app, String label) {
-    if (label.contains('核心') && app.coreStatus?.binaryPath == null) {
-      return '未找到 mihomo 可执行文件，请在设置中指定';
+    if (label.toLowerCase().contains('core') &&
+        app.coreStatus?.binaryPath == null) {
+      return 'Set the Mihomo executable path in Settings.';
     }
-    if (app.coreStatus?.running != true) return '核心未运行';
-    if (!app.apiOnline) return '控制器不可用（请检查 external-controller）';
-    return '当前不可用';
-  }
-
-  /// Resolves the default group down to the actually selected (leaf) node.
-  _CurrentNode? _currentNode(AppContext app) {
-    final snapshot = app.proxySnapshot;
-    if (snapshot == null) return null;
-    final group = defaultGroup(snapshot, app.activeInfo?.finalMatchTarget);
-    if (group == null || !group.isGroup) return null;
-    final leaf = resolveSelectedNode(snapshot, group);
-    return _CurrentNode(group.name, leaf?.name ?? group.now ?? '-');
+    if (app.coreStatus?.running != true) return 'The core is stopped.';
+    if (!app.apiOnline) {
+      return 'Controller unavailable. Check external-controller.';
+    }
+    return 'Unavailable';
   }
 
   List<_StatusRow> _statusRows(AppContext app) {
@@ -329,36 +326,36 @@ class DashboardView extends View {
     final rows = <_StatusRow>[];
 
     rows.add(_StatusRow(
-      '二进制',
-      status?.binaryPath ?? '未找到 mihomo（设置中可指定路径）',
+      'Binary',
+      status?.binaryPath ?? 'Mihomo not found. Set its path in Settings.',
       color: status?.binaryPath == null ? theme.red : null,
     ));
-    rows.add(_StatusRow('版本', status?.version ?? '未知'));
+    rows.add(_StatusRow('Version', status?.version ?? 'Unknown'));
     rows.add(_StatusRow(
-      '进程',
+      'Process',
       running
-          ? '运行中${status?.pidFromFile == false ? '（外部进程）' : ''}'
+          ? 'Running${status?.pidFromFile == false ? ' (external)' : ''}'
               ' | pid ${pid ?? '?'}'
-              '${uptime == null ? '' : ' | 已运行 ${formatDuration(uptime)}'}'
-          : '未运行',
+              '${uptime == null ? '' : ' | uptime ${formatDuration(uptime)}'}'
+          : 'Stopped',
       color: running
           ? (status?.pidFromFile == false ? theme.yellow : theme.green)
           : theme.red,
       bold: true,
     ));
     rows.add(_StatusRow(
-      '配置',
-      app.repo.activeName ?? '未选择',
+      'Config',
+      app.repo.activeName ?? 'None',
       color: app.repo.activeName == null ? theme.yellow : null,
     ));
     final ports = info?.portSummary ?? const <String>[];
-    rows.add(_StatusRow('端口', ports.isEmpty ? '-' : ports.join(' | ')));
+    rows.add(_StatusRow('Ports', ports.isEmpty ? '-' : ports.join(' | ')));
     final controller = info?.controllerAddress;
     rows.add(_StatusRow(
-      '控制器',
+      'Controller',
       controller == null
           ? '-'
-          : '$controller ${app.apiOnline ? '| 已连接 ${app.apiVersion ?? ''}' : '| 未连接'}'
+          : '$controller ${app.apiOnline ? '| Connected ${app.apiVersion ?? ''}' : '| Offline'}'
               .trim(),
       color: controller == null
           ? theme.muted
@@ -367,20 +364,27 @@ class DashboardView extends View {
               : theme.yellow,
     ));
     final mode = app.apiConfig?.mode ?? info?.mode;
-    rows.add(_StatusRow('模式', mode ?? '-'));
+    rows.add(_StatusRow('Mode', mode ?? '-'));
+    final tun = app.apiConfig?.tunEnabled;
+    rows.add(_StatusRow('TUN', tun == null ? '-' : (tun ? 'On' : 'Off')));
 
-    final node = _currentNode(app);
+    final liveMode = app.apiConfig?.mode;
+    final node = selectedOutbound(
+      app.proxySnapshot,
+      mode: liveMode,
+      matchTarget: info?.finalMatchTarget,
+    );
     rows.add(_StatusRow(
-      '当前节点',
-      node == null ? (app.apiOnline ? '读取中~' : '-') : node.name,
+      liveMode == 'rule' ? 'MATCH fallback' : 'Current node',
+      node ?? (app.apiOnline && app.proxySnapshot == null ? 'Loading...' : '-'),
       color: node == null ? theme.muted : theme.accentSoft,
       onPress: () => app.openView(2),
     ));
 
     final panel = info?.panelUrl;
     rows.add(_StatusRow(
-      '控制面板',
-      panel ?? (controller == null ? '未配置 external-controller' : '-'),
+      'Dashboard',
+      panel ?? (controller == null ? 'No external-controller' : '-'),
       color: panel == null ? theme.muted : theme.accent,
       onPress: panel == null ? null : () => app.openUrl(panel),
     ));
@@ -393,7 +397,7 @@ class DashboardView extends View {
       final address = app.lanAddress;
       if (address != null) {
         rows.add(_StatusRow(
-          '局域网代理',
+          'LAN proxy',
           port == null ? address : '$address:$port',
           color: theme.accentSoft,
         ));
@@ -410,7 +414,7 @@ class DashboardView extends View {
       if (summary != null) {
         final fraction = summary.fraction;
         rows.add(_StatusRow(
-          '套餐',
+          'Plan',
           summary.display,
           color: fraction == null
               ? theme.accentSoft
@@ -425,16 +429,16 @@ class DashboardView extends View {
 
     final connections = app.connections;
     rows.add(_StatusRow(
-      '连接',
-      connections == null ? '-' : '${connections.count} 个',
+      'Connections',
+      connections == null ? '-' : '${connections.count} ',
     ));
     rows.add(_StatusRow(
-      '流量',
+      'Traffic',
       connections == null
           ? '-'
-          : '上行 ${formatBytes(connections.uploadTotal)}'
-              ' | 下行 ${formatBytes(connections.downloadTotal)}'
-              '（自核心启动）',
+          : 'Up ${formatBytes(connections.uploadTotal)}'
+              ' | Down ${formatBytes(connections.downloadTotal)}'
+              ' (since start)',
       color: connections == null ? null : theme.accentSoft,
     ));
     return rows;
@@ -546,10 +550,4 @@ class _StatusRow {
   final int? color;
   final bool bold;
   final void Function()? onPress;
-}
-
-class _CurrentNode {
-  _CurrentNode(this.group, this.name);
-  final String group;
-  final String name;
 }

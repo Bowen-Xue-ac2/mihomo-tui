@@ -1,42 +1,60 @@
-# X · Mihomo 终端
+# X · Mihomo terminal
 
-我在 Windows 上自用的 Mihomo 终端工具，基于 [wzk0/mihomo-tui](https://github.com/wzk0/mihomo-tui) v1.4。平时用 PowerShell 切节点、切模式和查状态，需要测速或看日志时再打开终端界面。
+My Windows terminal client for Mihomo, based on [wzk0/mihomo-tui](https://github.com/wzk0/mihomo-tui) v1.4. I use PowerShell for node and mode changes and open the terminal UI for latency tests and logs.
 
-## 日常操作
+## Daily commands
 
 ```powershell
-wzk                        # 打开终端界面，概览显示 X
-wzk status --json          # 核心、配置和控制器状态
-wzk start                  # 启动内核
-wzk stop                   # 停止内核
-wzk restart                # 重启内核
-wzk nodes GLOBAL           # 列出候选节点，* 是当前选择
-wzk use GLOBAL "节点名"    # 填列表里的完整名称，支持空格
-wzk mode                   # 查看当前模式
-wzk mode rule              # 可选 rule、global、direct
+vpn_x                              # Open the X console and start the core if needed
+vpn_x status --json                 # Core, profile, and controller state
+vpn_x start
+vpn_x stop
+vpn_x restart
+vpn_x nodes GLOBAL                  # Node numbers, last latency, and current selection (*)
+vpn_x use GLOBAL 3                  # Select node 3 in the group
+vpn_x mode                          # Show the live routing mode
+vpn_x mode rule                     # rule, global, or direct
+vpn_x system-proxy status
+vpn_x system-proxy on
+vpn_x system-proxy off
+vpn_x tun status
+vpn_x tun on
+vpn_x tun off
 ```
 
-`wzk` 是本机的启动命令。其他环境可用编译后的 `mihomo-tui.exe` 执行同样的子命令。指定 `--data`、`--home` 和 `--bin` 时，把它们写在子命令前。这些命令从选定内核目录的 `config.yaml` 读取控制器信息，`mode` 修改的是当前运行模式。
+`vpn_x` is my local launcher. The compiled executable supports the same subcommands. Put `--data`, `--home`, and `--bin` before subcommands when using the executable. It reads the controller settings from the active `config.yaml`. Run `vpn_x --help` for profile, backup, and core-update options.
 
-## 终端快捷键
+### Node selection and routing
 
-| 按键 | 操作 |
+`vpn_x nodes <group>` numbers entries from 1 in the group's current order. The latency column shows the last result recorded by Mihomo. Entries without a result show `Untested`, and failed measurements can show `Timeout`. Run `vpn_x nodes <group>` again after refreshing or changing profiles, then pass the new number to `vpn_x use <group> <number>`.
+
+In Global mode, Overview shows the final selection reached through `GLOBAL`. In Direct mode, it shows `DIRECT`. In Rule mode, **MATCH fallback** shows the default route. Use Logs to see the rule and outbound chosen for an individual connection.
+
+### Windows system proxy and TUN
+
+The system proxy and TUN have independent controls. Release each one in the existing client before enabling it with `vpn_x`. The Windows TUN adapter is named `vpn_x`.
+
+To enable TUN, run `vpn_x start` in an Administrator terminal, then run `vpn_x tun on`. If the core is already running without elevation, use `vpn_x restart` in that Administrator terminal before retrying. TUN and routing-mode changes apply to the running core. Run `vpn_x tun on` again after restarting the core.
+
+## Keys
+
+| Key | Action |
 | --- | --- |
-| `1` / `2` / `3` / `4` / `5` | 概览 / 订阅 / 代理 / 日志 / 设置 |
-| `Tab` / `←→` | 切换焦点或代理组与节点列 |
-| `Enter` | 选中节点或执行操作 |
-| `t` / `T` | 在代理页测单节点 / 测整组 |
-| `q` | 关界面，内核继续在后台运行 |
+| `1` / `2` / `3` / `4` / `5` | Overview / Profiles / Proxies / Logs / Settings |
+| `Tab` / `←→` | Change focus or switch between groups and nodes |
+| `Enter` | Select a node or run an action |
+| `t` / `T` | Test one node or the entire group |
+| `q` | Close the interface and keep the core running |
 
-## 从源码构建
+## Build on Windows x64
 
-Windows x64 使用 Dart SDK 3.13.7。Mihomo 可执行文件和配置单独准备。
+Use Dart SDK 3.13.7 and provide the Mihomo executable and your profile separately.
 
 ```powershell
 dart pub get --enforce-lockfile
 New-Item -ItemType Directory -Force build | Out-Null
-dart compile exe bin/mihomo_tui.dart -o build/mihomo-tui.exe
-.\build\mihomo-tui.exe --help
+dart compile exe bin/mihomo_tui.dart -o build/vpn_x.exe
+.\build\vpn_x.exe --help
 ```
 
-这个版本包含 Windows 终端启动的信号监听修复。订阅、系统代理和备份的操作细节见 [上游 v1.4 文档](https://github.com/wzk0/mihomo-tui/tree/v1.4)。
+This build includes a Windows signal compatibility fix. For upstream profile management and backup instructions, see [the v1.4 documentation](https://github.com/wzk0/mihomo-tui/tree/v1.4).

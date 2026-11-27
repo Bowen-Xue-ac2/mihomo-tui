@@ -26,26 +26,26 @@ class SettingsView extends View {
   final ListState _list = ListState();
 
   @override
-  String get label => '设置';
+  String get label => 'Settings';
 
   @override
-  String get title => '设置';
+  String get title => 'Settings';
 
   @override
   List<KeyHint> hints(AppContext app) => const [
-        KeyHint('上下', '选择'),
-        KeyHint('Enter', '编辑'),
-        KeyHint('d', '自动检测核心'),
-        KeyHint('i', '关于'),
+        KeyHint('↑↓', 'Select'),
+        KeyHint('Enter', 'Edit'),
+        KeyHint('d', 'Detect core'),
+        KeyHint('i', 'About'),
       ];
 
   List<_Row> _rows(AppContext app) {
     final settings = app.settings;
     return [
       _Row(
-        'mihomo 可执行文件',
-        settings.mihomoBin ?? '自动检测',
-        '留空则从 PATH / 程序目录 / 常见路径自动查找',
+        'Mihomo binary',
+        settings.mihomoBin ?? 'Auto-detect',
+        'Leave blank to search PATH and common locations',
         editable: true,
         onEdit: (value) => _apply(
             app,
@@ -55,9 +55,9 @@ class SettingsView extends View {
             )),
       ),
       _Row(
-        'mihomo 配置目录',
+        'Mihomo directory',
         settings.mihomoHome ?? app.paths.mihomoHome,
-        '启动核心时使用 -d 指定的目录，config.yaml 会写在这里',
+        'Mihomo uses this directory with -d and reads config.yaml here.',
         editable: true,
         onEdit: (value) => _apply(
             app,
@@ -67,9 +67,9 @@ class SettingsView extends View {
             )),
       ),
       _Row(
-        '编辑器',
+        'Editor',
         settings.editor ?? AppPaths.defaultEditor,
-        '编辑订阅时使用，支持带参数（如 "code -w"）',
+        'Edit profiles with a command such as "code -w"',
         editable: true,
         onEdit: (value) => _apply(
             app,
@@ -79,23 +79,23 @@ class SettingsView extends View {
             )),
       ),
       _Row(
-        '更新内核',
-        app.coreStatus?.version ?? '未安装',
-        '从 GitHub 官方获取与当前平台/架构匹配的内核（${CoreUpdater.platformLabel}）',
+        'Update core',
+        app.coreStatus?.version ?? 'Not installed',
+        'Download the matching core from GitHub (${CoreUpdater.platformLabel})',
         action: true,
         onActivate: () => unawaited(app.updateCore()),
       ),
       _Row(
-        '下载镜像',
+        'Download mirror',
         _mirrorValue(app),
-        '选择更新内核的下载源，打开后可看到各镜像的连通性',
+        'Choose a mirror and check its connectivity',
         action: true,
         onActivate: app.showMirrorPicker,
       ),
       _Row(
-        '下载代理',
+        'Download proxy',
         settings.downloadProxy ?? _defaultProxy(),
-        '留空则使用环境变量 http_proxy/https_proxy',
+        'Leave blank to use http_proxy and https_proxy',
         editable: true,
         onEdit: (value) => _apply(
             app,
@@ -105,84 +105,92 @@ class SettingsView extends View {
             )),
       ),
       _Row(
-        '主题色',
+        'Accent color',
         Theme.accentLabel(settings.accent ?? 'blue'),
-        '回车切换强调色（蓝 / 紫 / 绿 / 橙 / 青 / 玫红）',
+        'Press Enter to cycle the accent color',
         action: true,
         onActivate: () => unawaited(app.cycleThemeAccent()),
       ),
       _Row(
-        '明暗模式',
+        'Color mode',
         switch (settings.colorMode ?? 'auto') {
-          'light' => '亮色',
-          'dark' => '暗色',
-          _ => '跟随终端',
+          'light' => 'Light',
+          'dark' => 'Dark',
+          _ => 'Terminal default',
         },
-        '终端深浅色不同，可强制指定；自动模式读取 OSC 11 / COLORFGBG',
+        'Use the terminal colors or override them. Auto reads OSC 11 or COLORFGBG.',
         action: true,
         onActivate: () => unawaited(app.cycleColorMode()),
       ),
       _Row(
-        '开机自启',
+        'Start at login',
         _autostartLabel(app),
-        '随登录自动启动 mihomo（Linux: systemd 用户服务；Windows: 注册表 Run）',
+        'Start Mihomo at sign-in (systemd user service or Windows Run)',
         action: true,
         onActivate: () => unawaited(app.toggleAutostart()),
       ),
       _Row(
-        '导出数据',
-        '导出为 zip',
-        '设置 + 订阅索引 + 所有配置文件，导出到主目录',
+        'Export data',
+        'Export ZIP',
+        'Export settings, profile index, and configurations to the home directory',
         action: true,
         onActivate: () => app.confirm(
-          title: '导出数据',
-          message: '将设置、订阅索引（data.json）与全部配置文件打包为 zip。',
-          detail: const ['默认保存在主目录，文件名带时间戳。'],
-          confirmLabel: '导出',
+          title: 'Export data',
+          message:
+              'Export settings, data.json, and profile configurations as a ZIP.',
+          detail: const [
+            'The archive is timestamped and saved in your home directory.'
+          ],
+          confirmLabel: 'Export',
           onConfirm: () => unawaited(app.exportData()),
         ),
       ),
-      _Row('数据目录', app.paths.configDir, '订阅配置、日志与运行状态',
+      _Row('Data directory', app.paths.configDir,
+          'Profile configurations, logs, and runtime state',
           action: true, onActivate: () => _openPath(app, app.paths.configDir)),
-      _Row('订阅目录', app.paths.profilesDir, '每个订阅保存为 <名称>.yaml',
+      _Row('Profiles directory', app.paths.profilesDir,
+          'Profiles are saved as <name>.yaml',
           action: true,
           onActivate: () => _openPath(app, app.paths.profilesDir)),
-      _Row('日志文件', app.paths.logFile, 'mihomo 的 stdout/stderr 输出',
+      _Row('Log file', app.paths.logFile, 'Mihomo stdout and stderr',
           action: true,
           onActivate: () => _openPath(app,
               app.core.hasLogFile ? app.paths.logFile : app.paths.logsDir)),
       _Row(
-        '检测核心',
+        'Detect core',
         app.coreStatus?.binaryPath == null
-            ? '未找到'
+            ? 'Not found'
             : app.coreStatus!.binaryPath!,
-        '重新扫描 mihomo 可执行文件',
+        'Search for the Mihomo executable again',
         action: true,
         onActivate: () => unawaited(app.refresh()),
       ),
-      _Row('关于', '$appName $appVersion', '终端界面 | 鼠标与键盘均可操作',
+      _Row('About', '$appName $appVersion',
+          'Terminal interface with mouse and keyboard support',
           action: true, onActivate: () => _about(app)),
     ];
   }
 
   String _mirrorValue(AppContext app) {
     final current = mirrorById(app.settings.mirror);
-    if (app.isMirrorProbing(current.id)) return '${current.label}（检测中~）';
+    if (app.isMirrorProbing(current.id)) {
+      return '${current.label} (checking...)';
+    }
     final probe = app.mirrorProbes[current.id];
     if (probe == null) return current.label;
-    return '${current.label}（${probe.label}）';
+    return '${current.label}(${probe.label})';
   }
 
   String _autostartLabel(AppContext app) => switch (app.autostartState) {
-        AutostartState.enabled => '已启用',
-        AutostartState.disabled => '未启用',
-        AutostartState.unsupported => '当前平台不支持 / 未找到内核',
-        AutostartState.unknown => '检测中~',
+        AutostartState.enabled => 'Enabled',
+        AutostartState.disabled => 'Disabled',
+        AutostartState.unsupported => 'Unsupported platform or core missing',
+        AutostartState.unknown => 'Checking...',
       };
 
   String _defaultProxy() {
     final proxy = Downloader.envProxy();
-    return proxy ?? '未设置（走直连）';
+    return proxy ?? 'Direct';
   }
 
   @override
@@ -269,7 +277,7 @@ class SettingsView extends View {
       y += rowHeight + 1;
     }
     // Painted last so stray text can never break the frame.
-    painter.drawBox(area, focused: focused, title: '设置');
+    painter.drawBox(area, focused: focused, title: 'Settings');
   }
 
   void _edit(AppContext app, _Row row) {
@@ -282,9 +290,11 @@ class SettingsView extends View {
         fields: [
           FormFieldSpec(
             key: 'value',
-            label: '新的值',
-            hint: row.label.contains('可执行文件') ? '留空则自动检测' : row.value,
-            initial: row.value == '自动检测' ? '' : row.value,
+            label: 'New value',
+            hint: row.label == 'Mihomo binary'
+                ? 'Leave blank to detect automatically'
+                : row.value,
+            initial: row.value == 'Auto-detect' ? '' : row.value,
           ),
         ],
         onSubmit: (values) => row.onEdit!(values['value']?.trim() ?? ''),
@@ -294,7 +304,7 @@ class SettingsView extends View {
 
   Future<void> _apply(AppContext app, Settings next) async {
     await app.applySettings(next);
-    app.toast('设置已保存', level: ToastLevel.success);
+    app.toast('Settings saved.', level: ToastLevel.success);
   }
 
   void _openPath(AppContext app, String path) {
@@ -306,26 +316,26 @@ class SettingsView extends View {
   void _about(AppContext app) {
     app.showOverlay(
       InfoOverlay(
-        title: '关于 $appName',
+        title: 'About $appName',
         lines: [
           '$appName $appVersion',
           appDescription,
           '',
-          '平台      ${platformLabel()}',
+          'Platform      ${platformLabel()}',
           'Dart      ${Platform.version.split(' ').first}',
-          '数据目录  ${app.paths.configDir}',
-          '配置目录  ${app.paths.mihomoHome}',
-          '核心      ${app.coreStatus?.binaryPath ?? '未找到'}',
-          '版本      ${app.coreStatus?.version ?? '未知'}',
+          'Data directory  ${app.paths.configDir}',
+          'Config directory  ${app.paths.mihomoHome}',
+          'Core      ${app.coreStatus?.binaryPath ?? 'Not found'}',
+          'Version      ${app.coreStatus?.version ?? 'Unknown'}',
           '',
-          '操作提示',
-          '  | 鼠标点击即可选中条目，滚轮可滚动列表',
-          '  | Tab 在侧栏与内容区之间切换焦点',
-          '  | ? 打开快捷键帮助',
+          'Keyboard and mouse',
+          '  | Click to select or scroll to browse',
+          '  | Tab switches focus between navigation and content',
+          '  | ? Show keyboard shortcuts',
           '',
-          'mihomo-tui 是原 clash_tui（python）的 Dart 重写版，',
-          '核心改用 mihomo（Clash.Meta），并新增了控制器集成、',
-          '鼠标操作与日志查看。',
+          'Based on wzk0/mihomo-tui, the Dart rewrite of clash_tui.',
+          'Uses Mihomo (Clash.Meta) with controller integration,',
+          'mouse input, and live logs.',
         ],
       ),
     );

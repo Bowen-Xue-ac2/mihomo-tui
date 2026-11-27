@@ -51,10 +51,10 @@ class ProfileInfo {
     try {
       document = loadYaml(content);
     } on YamlException catch (error) {
-      throw FormatException('配置不是合法的 YAML：${error.message}');
+      throw FormatException('Invalid YAML: ${error.message}');
     }
     if (document is! YamlMap) {
-      throw const FormatException('配置文件顶层不是映射（map）');
+      throw const FormatException('The YAML root must be a mapping.');
     }
 
     int? readPort(String key) {

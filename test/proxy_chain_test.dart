@@ -45,25 +45,38 @@ void main() {
     });
   });
 
-  group('defaultGroup', () {
-    test('prefers the MATCH target', () {
-      final match = node('节点选择', now: 'a', all: ['a']);
-      final global = node('GLOBAL', now: 'a', all: ['a']);
-      final snapshot = snapshotOf([node('a'), match, global]);
-      expect(defaultGroup(snapshot, '节点选择')?.name, '节点选择');
-    });
+  group('selectedOutbound', () {
+    final match = node('节点选择', now: 'Rule exit', all: ['Rule exit']);
+    final inner = node('HK', now: '香港 01', all: ['香港 01']);
+    final global = node('GLOBAL', now: 'HK', all: ['HK']);
+    final snapshot =
+        snapshotOf([node('Rule exit'), node('香港 01'), match, inner, global]);
 
-    test('falls back to GLOBAL then the first group', () {
-      final global = node('GLOBAL', now: 'a', all: ['a']);
+    test('uses GLOBAL in global mode and follows nested groups', () {
       expect(
-          defaultGroup(snapshotOf([node('a'), global]), null)?.name, 'GLOBAL');
-
-      final other = node('其它', now: 'a', all: ['a']);
-      expect(defaultGroup(snapshotOf([node('a'), other]), null)?.name, '其它');
+        selectedOutbound(snapshot, mode: 'global', matchTarget: match.name),
+        '香港 01',
+      );
     });
 
-    test('returns null without groups', () {
-      expect(defaultGroup(snapshotOf([node('a')]), null), isNull);
+    test('uses MATCH as the fallback in rule mode', () {
+      expect(
+        selectedOutbound(snapshot, mode: 'rule', matchTarget: match.name),
+        'Rule exit',
+      );
+      expect(
+        selectedOutbound(snapshot, mode: 'rule', matchTarget: 'Rule exit'),
+        'Rule exit',
+      );
+    });
+
+    test('keeps DIRECT and missing routes explicit', () {
+      expect(selectedOutbound(null, mode: 'direct', matchTarget: match.name),
+          'DIRECT');
+      expect(
+          selectedOutbound(snapshot, mode: 'rule', matchTarget: null), isNull);
+      expect(selectedOutbound(snapshot, mode: null, matchTarget: match.name),
+          isNull);
     });
   });
 }

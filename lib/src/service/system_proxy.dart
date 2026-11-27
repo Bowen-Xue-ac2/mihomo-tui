@@ -62,6 +62,23 @@ class SystemProxy {
     return null;
   }
 
+  /// True only when the configured proxy entries point to this loopback port.
+  static Future<bool> pointsToLoopback(int port) async {
+    if (!Platform.isWindows) return await currentHttpPort() == port;
+    final output =
+        await _run('reg', ['query', _windowsKey, '/v', 'ProxyServer']);
+    if (output == null) return false;
+    final value =
+        RegExp(r'^\s*ProxyServer\s+REG_SZ\s+([^\r\n]+)', multiLine: true)
+            .firstMatch(output)
+            ?.group(1);
+    if (value == null) return false;
+    final entries = value.split(';').where((entry) => entry.trim().isNotEmpty);
+    return entries.isNotEmpty &&
+        entries
+            .every((entry) => entry.split('=').last.trim() == '$_host:$port');
+  }
+
   static Future<SystemProxyResult> enable({
     required int httpPort,
     int? socksPort,
@@ -73,7 +90,7 @@ class SystemProxy {
       if (!await _gnomeAvailable()) {
         return const SystemProxyResult(
           false,
-          '没有检测到 GNOME 的代理设置（gsettings），请手动配置系统代理',
+          'GNOME proxy settings are unavailable. Configure the system proxy manually.',
         );
       }
       final socks = socksPort ?? httpPort;
@@ -91,16 +108,16 @@ class SystemProxy {
         commands.map((command) => _run('gsettings', command)),
       );
       if (results.contains(null)) {
-        return const SystemProxyResult(false, 'gsettings 执行失败');
+        return const SystemProxyResult(false, 'gsettings failed.');
       }
       return SystemProxyResult(
         true,
-        '已开启 GNOME 系统代理 | http/https $_host:$httpPort | socks $_host:$socks',
+        'GNOME system proxy enabled | http/https $_host:$httpPort | socks $_host:$socks',
       );
     }
     return const SystemProxyResult(
       false,
-      '当前平台暂不支持一键设置系统代理，请手动配置',
+      'Configure the system proxy manually on this platform.',
     );
   }
 
@@ -118,16 +135,17 @@ class SystemProxy {
         '/f',
       ]);
       if (enable == null) {
-        return const SystemProxyResult(false, '写入注册表失败');
+        return const SystemProxyResult(
+            false, 'Failed to write registry settings.');
       }
       _refreshWindowsProxy();
-      return const SystemProxyResult(true, '已关闭 Windows 系统代理');
+      return const SystemProxyResult(true, 'Windows system proxy disabled.');
     }
     if (Platform.isLinux) {
       if (!await _gnomeAvailable()) {
         return const SystemProxyResult(
           false,
-          '没有检测到 GNOME 的代理设置（gsettings），请手动配置系统代理',
+          'GNOME proxy settings are unavailable. Configure the system proxy manually.',
         );
       }
       final result = await _run('gsettings', [
@@ -137,13 +155,13 @@ class SystemProxy {
         'none',
       ]);
       if (result == null) {
-        return const SystemProxyResult(false, 'gsettings 执行失败');
+        return const SystemProxyResult(false, 'gsettings failed.');
       }
-      return const SystemProxyResult(true, '已关闭 GNOME 系统代理');
+      return const SystemProxyResult(true, 'GNOME system proxy disabled.');
     }
     return const SystemProxyResult(
       false,
-      '当前平台暂不支持一键设置系统代理，请手动配置',
+      'Configure the system proxy manually on this platform.',
     );
   }
 
@@ -194,19 +212,15 @@ class SystemProxy {
   }
 
   static Future<SystemProxyResult> _windowsEnable(int port) async {
+    if (await _windowsState() == SystemProxyState.enabled &&
+        !await pointsToLoopback(port)) {
+      return const SystemProxyResult(
+        false,
+        'Another app owns the Windows system proxy. Disable it there first.',
+      );
+    }
     final server = '$_host:$port';
     for (final args in [
-      [
-        'add',
-        _windowsKey,
-        '/v',
-        'ProxyEnable',
-        '/t',
-        'REG_DWORD',
-        '/d',
-        '1',
-        '/f',
-      ],
       [
         'add',
         _windowsKey,
@@ -218,14 +232,26 @@ class SystemProxy {
         server,
         '/f',
       ],
+      [
+        'add',
+        _windowsKey,
+        '/v',
+        'ProxyEnable',
+        '/t',
+        'REG_DWORD',
+        '/d',
+        '1',
+        '/f',
+      ],
     ]) {
       final result = await _run('reg', args);
       if (result == null) {
-        return const SystemProxyResult(false, '写入注册表失败');
+        return const SystemProxyResult(
+            false, 'Failed to write registry settings.');
       }
     }
     _refreshWindowsProxy();
-    return SystemProxyResult(true, '已开启 Windows 系统代理 | $server');
+    return SystemProxyResult(true, 'Windows system proxy enabled | $server');
   }
 
   /// Windows caches proxy settings; WinINet needs a nudge to reload them.

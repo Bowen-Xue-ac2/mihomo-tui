@@ -17,10 +17,10 @@ import 'view.dart';
 /// How much of each log line is rendered.
 enum LogMode {
   /// `HH:MM:SS LEVEL message`
-  standard('标准'),
+  standard('Standard'),
 
   /// `LEVEL message`
-  compact('精简');
+  compact('Compact');
 
   const LogMode(this.label);
 
@@ -37,18 +37,18 @@ class LogsView extends View {
   DateTime _lastLoad = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
-  String get label => '日志';
+  String get label => 'Logs';
 
   @override
-  String get title => '核心日志';
+  String get title => 'Core logs';
 
   @override
   List<KeyHint> hints(AppContext app) => [
-        KeyHint('s', '视图：${_mode.label}'),
-        KeyHint('f', _follow ? '停止跟随' : '跟随'),
-        KeyHint('Enter', '详情'),
-        KeyHint('r', '刷新'),
-        KeyHint('c', '清空'),
+        KeyHint('s', 'View: ${_mode.label}'),
+        KeyHint('f', _follow ? 'Pause' : 'Follow'),
+        KeyHint('Enter', 'Details'),
+        KeyHint('r', 'Refresh'),
+        KeyHint('c', 'Clear'),
       ];
 
   @override
@@ -82,14 +82,14 @@ class LogsView extends View {
     required bool focused,
   }) {
     final theme = app.theme;
-    final status = _follow ? '跟随中' : '已暂停';
+    final status = _follow ? 'Following' : 'Paused';
     final inner = Rect(area.x + 1, area.y + 1, area.width - 2, area.height - 2);
     if (_entries.isEmpty) {
       final hints = app.core.hasLogFile
-          ? ['日志文件为空，启动核心后会有输出。']
+          ? ['Start the core to generate logs.']
           : [
-              '还没有日志文件：${app.paths.logFile}',
-              '启动一次核心（概览 -> s）即可生成。',
+              'Log not found: ${app.paths.logFile}',
+              'Press s in Overview to start the core.',
             ];
       var y = inner.y;
       for (final line in hints) {
@@ -103,7 +103,7 @@ class LogsView extends View {
       painter.drawBox(
         area,
         focused: focused,
-        title: '核心日志 | ${_mode.label} | $status',
+        title: 'Core logs | ${_mode.label} | $status',
       );
       return;
     }
@@ -170,7 +170,7 @@ class LogsView extends View {
     painter.drawBox(
       area,
       focused: focused,
-      title: '核心日志 | ${_mode.label} | $status',
+      title: 'Core logs | ${_mode.label} | $status',
     );
     if (maxScroll > 0 && rows > 2) {
       final barHeight = ((rows / total) * rows).round().clamp(1, rows);
@@ -243,15 +243,15 @@ class LogsView extends View {
     if (index < 0 || index >= _entries.length) return;
     final entry = _entries[index];
     app.showOverlay(InfoOverlay(
-      title: '日志详情',
+      title: 'Log entry',
       lines: [
-        '时间    ${entry.time ?? '-'}',
-        '级别    ${entry.level}',
+        'Time    ${entry.time ?? '-'}',
+        'Level    ${entry.level}',
         '',
-        '内容',
+        'Message',
         ...wrapText(entry.message, 78),
         '',
-        '原始行',
+        'Raw entry',
         ...wrapText(entry.raw, 78),
       ],
     ));
@@ -307,14 +307,14 @@ class LogsView extends View {
     }
     if (event.isChar('c')) {
       app.confirm(
-        title: '清空日志',
-        message: '确定清空 ${app.paths.logFile} 吗？',
-        confirmLabel: '清空',
+        title: 'Clear logs',
+        message: 'Clear ${app.paths.logFile}?',
+        confirmLabel: 'Clear',
         danger: true,
         onConfirm: () {
           app.core.clearLog();
           _entries = const [];
-          app.toast('日志已清空', level: ToastLevel.success);
+          app.toast('Logs cleared.', level: ToastLevel.success);
         },
       );
       return true;

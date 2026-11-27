@@ -29,20 +29,20 @@ class ProxiesView extends View {
   int _testTotal = 0;
 
   @override
-  String get label => '代理';
+  String get label => 'Proxies';
 
   @override
-  String get title => '代理组';
+  String get title => 'Proxy groups';
 
   @override
   List<KeyHint> hints(AppContext app) => [
-        const KeyHint('上下', '移动'),
-        const KeyHint('Tab', '切换列'),
-        const KeyHint('Enter', '选择节点'),
-        const KeyHint('t', '测延迟'),
-        const KeyHint('T', '测速全部'),
-        KeyHint('s', '排序：${_sort.label}'),
-        const KeyHint('r', '刷新'),
+        const KeyHint('↑↓', 'Move'),
+        const KeyHint('Tab', 'Switch column'),
+        const KeyHint('Enter', 'Select node'),
+        const KeyHint('t', 'Test latency'),
+        const KeyHint('T', 'Test group'),
+        KeyHint('s', 'Sort: ${_sort.label}'),
+        const KeyHint('r', 'Refresh'),
       ];
 
   @override
@@ -71,22 +71,23 @@ class ProxiesView extends View {
         app,
         painter,
         area,
-        '控制器未连接',
+        'Controller offline',
         [
-          '请先在「概览」中启动核心，并确认配置里的 external-controller 可访问。',
+          'Start the core in Overview and check external-controller.',
           if (app.activeInfo?.externalController == null)
-            '当前配置没有设置 external-controller。',
+            'The active config is missing external-controller.',
         ],
       );
       return;
     }
     if (snapshot == null) {
-      _drawNotice(app, painter, area, '正在获取代理组', ['按 r 刷新代理列表。']);
+      _drawNotice(
+          app, painter, area, 'Loading proxy groups', ['Press r to refresh.']);
       return;
     }
     if (snapshot.groups.isEmpty) {
-      _drawNotice(
-          app, painter, area, '没有可用的代理组', ['控制器已连接，但配置中没有 proxy-groups。']);
+      _drawNotice(app, painter, area, 'No proxy groups',
+          ['The active configuration has no proxy-groups.']);
       return;
     }
 
@@ -109,8 +110,8 @@ class ProxiesView extends View {
 
     final sortLabel = _sort == NodeSortMode.original ? '' : ' | ${_sort.label}';
     final rightTitle = _testingAll
-        ? '${group.name} | 测速中 $_testDone/$_testTotal（Esc 取消）'
-        : '${group.name} | ${group.type} | ${nodes.length} 节点$sortLabel';
+        ? '${group.name} | Testing $_testDone/$_testTotal (Esc to cancel)'
+        : '${group.name} | ${group.type} | ${nodes.length} Nodes$sortLabel';
 
     final listHeight = leftRect.height - 2;
     _groupList.bind(total: snapshot.groups.length, visible: listHeight);
@@ -208,11 +209,11 @@ class ProxiesView extends View {
       );
       final delay = _delays.containsKey(name) ? _delays[name] : node?.delay;
       final delayText = _testing.contains(name)
-          ? '测试中'
+          ? 'Testing'
           : delay == null
-              ? (node?.alive == false ? '失效' : '-')
+              ? (node?.alive == false ? 'Unavailable' : '-')
               : delay == 0
-                  ? '超时'
+                  ? 'Timeout'
                   : '${delay}ms';
       final delayColor = _testing.contains(name)
           ? theme.yellow
@@ -252,7 +253,7 @@ class ProxiesView extends View {
       painter.text(
         innerRight.x + 1,
         innerRight.y,
-        '该代理组没有节点',
+        'This group has no nodes.',
         Style(fg: theme.muted),
       );
     }
@@ -260,7 +261,7 @@ class ProxiesView extends View {
     painter.drawBox(
       leftRect,
       focused: focused && _pane == 0,
-      title: '代理组 (${snapshot.groups.length})',
+      title: 'Proxy groups (${snapshot.groups.length})',
     );
     painter.drawBox(
       rightRect,
@@ -376,7 +377,7 @@ class ProxiesView extends View {
     if (event.isChar('s')) {
       _sort = _sort.next;
       _nodeList.reset();
-      app.toast('节点排序：${_sort.label}');
+      app.toast('Node order: ${_sort.label}');
       return true;
     }
     if (event.isCharExact('T')) {
@@ -404,10 +405,10 @@ class ProxiesView extends View {
     if (api == null) return;
     try {
       await api.select(group, node);
-      app.toast('已切换到 $node', level: ToastLevel.success);
+      app.toast('Selected $node', level: ToastLevel.success);
       await app.refresh();
     } on ApiException catch (error) {
-      app.toast('切换失败：${error.message}', level: ToastLevel.error);
+      app.toast('Switch failed: ${error.message}', level: ToastLevel.error);
     }
   }
 
@@ -419,11 +420,11 @@ class ProxiesView extends View {
       final delay = await api.delay(name);
       _delays[name] = delay ?? 0;
       app.toast(
-        delay == null ? '$name 延迟测试超时' : '$name | ${delay}ms',
+        delay == null ? '$name latency test timed out' : '$name | ${delay}ms',
         level: delay == null ? ToastLevel.warning : ToastLevel.success,
       );
     } on ApiException catch (error) {
-      app.toast('测试失败：${error.message}', level: ToastLevel.error);
+      app.toast('Test failed: ${error.message}', level: ToastLevel.error);
     } finally {
       _testing.remove(name);
       app.requestFrame();
@@ -434,7 +435,8 @@ class ProxiesView extends View {
     final snapshot = app.proxySnapshot;
     final api = app.apiRef;
     if (snapshot == null || api == null) {
-      app.toast('控制器未连接，无法测速', level: ToastLevel.warning);
+      app.toast('Connect the controller to test latency.',
+          level: ToastLevel.warning);
       return;
     }
     if (_testingAll) {
@@ -446,7 +448,7 @@ class ProxiesView extends View {
         .where((name) => snapshot.nodes[name]?.isGroup != true)
         .toList();
     if (names.isEmpty) {
-      app.toast('该代理组没有可测速的节点', level: ToastLevel.warning);
+      app.toast('This group has no testable nodes.', level: ToastLevel.warning);
       return;
     }
     _testingAll = true;
@@ -488,8 +490,8 @@ class ProxiesView extends View {
     final ok = names.where((name) => (_delays[name] ?? 0) > 0).length;
     app.toast(
       cancelled
-          ? '测速已取消（$_testDone/$_testTotal）'
-          : '测速完成：$ok/${names.length} 个节点可用',
+          ? 'Tests canceled ($_testDone/$_testTotal)'
+          : '$ok/${names.length} nodes passed the latency test.',
       level: cancelled ? ToastLevel.warning : ToastLevel.success,
     );
     app.requestFrame();

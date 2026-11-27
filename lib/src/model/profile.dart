@@ -96,30 +96,34 @@ class Profile {
 
 /// Rejects names that cannot safely become file names.
 String? validateProfileName(String name) {
-  if (name.trim().isEmpty) return '名称不能为空';
-  if (name.trim() != name) return '名称首尾不能有空格';
-  if (name.length > 64) return '名称过长（最多 64 个字符）';
+  if (name.trim().isEmpty) return 'Enter a name.';
+  if (name.trim() != name) {
+    return 'Remove leading and trailing spaces from the name.';
+  }
+  if (name.length > 64) return 'Use a name of at most 64 characters.';
   const invalid = r'<>:"/\|?*';
   for (final rune in name.runes) {
     final char = String.fromCharCode(rune);
     if (rune < 0x20 || invalid.contains(char)) {
-      return '名称不能包含 $char 或控制字符';
+      return 'Names cannot contain $char or control characters.';
     }
   }
-  if (name.endsWith('.')) return '名称不能以点结尾';
+  if (name.endsWith('.')) return 'Names cannot end with a period.';
   const reserved = {
     'CON', 'PRN', 'AUX', 'NUL', //
     'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
     'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
   };
-  if (reserved.contains(name.toUpperCase())) return '该名称是系统保留名';
+  if (reserved.contains(name.toUpperCase())) {
+    return 'This name is reserved by the OS.';
+  }
   return null;
 }
 
 String? validateSubscriptionUrl(String url) {
-  if (url.trim().isEmpty) return '订阅地址不能为空';
+  if (url.trim().isEmpty) return 'Enter a subscription URL.';
   if (normalizeHttpUri(url) == null) {
-    return '订阅地址无效（需要 http/https 地址，主机名不能含空格或特殊字符）';
+    return 'Enter an HTTP or HTTPS URL with a valid hostname.';
   }
   return null;
 }

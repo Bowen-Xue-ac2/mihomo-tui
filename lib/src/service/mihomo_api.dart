@@ -50,6 +50,8 @@ class ApiConfig {
     this.port,
     this.socksPort,
     this.allowLan,
+    this.tunEnabled,
+    this.tunDevice,
   });
 
   final String? mode;
@@ -58,6 +60,8 @@ class ApiConfig {
   final int? port;
   final int? socksPort;
   final bool? allowLan;
+  final bool? tunEnabled;
+  final String? tunDevice;
 
   static ApiConfig fromJson(Map<String, Object?> json) {
     int? port(String key) {
@@ -67,6 +71,7 @@ class ApiConfig {
       return null;
     }
 
+    final tun = json['tun'];
     return ApiConfig(
       mode: json['mode'] as String?,
       logLevel: json['log-level'] as String?,
@@ -74,6 +79,8 @@ class ApiConfig {
       port: port('port'),
       socksPort: port('socks-port'),
       allowLan: json['allow-lan'] as bool?,
+      tunEnabled: tun is Map ? tun['enable'] as bool? : null,
+      tunDevice: tun is Map ? tun['device'] as String? : null,
     );
   }
 }
@@ -131,18 +138,18 @@ class MihomoApi {
       final text = await utf8.decoder.bind(response).join().timeout(timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ApiException(
-          'HTTP ${response.statusCode}${text.isEmpty ? '' : '：${text.trim()}'}',
+          'HTTP ${response.statusCode}${text.isEmpty ? '' : ': ${text.trim()}'}',
           statusCode: response.statusCode,
         );
       }
       if (text.trim().isEmpty) return null;
       return jsonDecode(text);
     } on SocketException {
-      throw ApiException('无法连接 mihomo 控制器');
+      throw ApiException('Could not connect to the Mihomo controller.');
     } on TimeoutException {
-      throw ApiException('请求 mihomo 控制器超时');
+      throw ApiException('Mihomo controller request timed out.');
     } on FormatException {
-      throw ApiException('控制器返回了无法解析的数据');
+      throw ApiException('The controller returned malformed data.');
     }
   }
 
@@ -167,11 +174,20 @@ class MihomoApi {
     final json = await _request('GET', _uri('/configs'));
     if (json is Map<String, Object?>) return ApiConfig.fromJson(json);
     if (json is Map) return ApiConfig.fromJson(json.cast<String, Object?>());
-    throw ApiException('控制器返回了无效的配置数据');
+    throw ApiException('The controller returned invalid configuration data.');
   }
 
   Future<void> setMode(String mode) async {
     await _request('PATCH', _uri('/configs'), body: {'mode': mode});
+  }
+
+  Future<void> setTun(bool enabled, {String? device}) async {
+    await _request('PATCH', _uri('/configs'), body: {
+      'tun': {
+        'enable': enabled,
+        if (device != null) 'device': device,
+      },
+    });
   }
 
   /// Toggles `allow-lan` on the running core.
@@ -191,7 +207,7 @@ class MihomoApi {
   Future<ProxySnapshot> proxies() async {
     final json = await _request('GET', _uri('/proxies'));
     if (json is! Map || json['proxies'] is! Map) {
-      throw ApiException('控制器返回了无效的代理数据');
+      throw ApiException('The controller returned invalid proxy data.');
     }
     final raw = (json['proxies'] as Map).cast<String, Object?>();
     final nodes = <String, ProxyNode>{};
@@ -260,7 +276,9 @@ class MihomoApi {
 
   Future<ConnectionsInfo> connections() async {
     final json = await _request('GET', _uri('/connections'));
-    if (json is! Map) throw ApiException('控制器返回了无效的连接数据');
+    if (json is! Map) {
+      throw ApiException('The controller returned invalid connection data.');
+    }
     final connections = json['connections'];
     return ConnectionsInfo(
       count: connections is List ? connections.length : 0,

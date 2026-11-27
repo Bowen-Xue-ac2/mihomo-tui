@@ -56,7 +56,7 @@ abstract class AppContext {
     required String title,
     required String message,
     List<String> detail = const [],
-    String confirmLabel = '确认',
+    String confirmLabel = 'Confirm',
     bool danger = false,
     required void Function() onConfirm,
   });

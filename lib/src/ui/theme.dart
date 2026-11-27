@@ -74,12 +74,12 @@ class Theme {
 
   /// Accent presets: id -> (label, dark, light).
   static const Map<String, (String, int, int)> accents = {
-    'blue': ('蓝', 0x6ea8fe, 0x2563eb),
-    'violet': ('紫', 0xb98bdb, 0x7c3aed),
-    'green': ('绿', 0x4ec9a0, 0x15803d),
-    'orange': ('橙', 0xe3a15a, 0xc2660a),
-    'cyan': ('青', 0x58c3d6, 0x0e7490),
-    'rose': ('玫红', 0xff8fa3, 0xbe123c),
+    'blue': ('Blue', 0x6ea8fe, 0x2563eb),
+    'violet': ('Violet', 0xb98bdb, 0x7c3aed),
+    'green': ('Green', 0x4ec9a0, 0x15803d),
+    'orange': ('Orange', 0xe3a15a, 0xc2660a),
+    'cyan': ('Cyan', 0x58c3d6, 0x0e7490),
+    'rose': ('Rose', 0xff8fa3, 0xbe123c),
   };
 
   /// xterm's 16 base colours, used to interpret `COLORFGBG`.

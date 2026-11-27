@@ -132,7 +132,6 @@ class App implements AppContext {
   DateTime _systemProxyChecked = DateTime.fromMillisecondsSinceEpoch(0);
   String? _lanAddress;
   DateTime _lanAddressChecked = DateTime.fromMillisecondsSinceEpoch(0);
-  bool _proxyManagedByCore = false;
   final Map<String, MirrorProbe> _mirrorProbes = {};
   final Set<String> _mirrorProbing = {};
   CoreRelease? _releaseCache;
@@ -276,9 +275,9 @@ class App implements AppContext {
   @override
   void hideToBackground() {
     final pid = _coreStatus?.pid;
-    _farewell = '$appName 已转入后台'
-        '${pid == null ? '' : '，mihomo 继续运行（pid $pid）'}'
-        '。再次运行 $appName 即可回到面板。';
+    _farewell = '$appName is now in the background'
+        '${pid == null ? '' : '. Mihomo is still running (PID $pid)'}'
+        '. Run $appName again to reopen the interface.';
     quit();
   }
 
@@ -343,7 +342,7 @@ class App implements AppContext {
     final height = _screen.height;
     _screen.fillRect(0, 0, width, height, Style(bg: theme.background));
     if (width < 40 || height < 10) {
-      p.text(1, 1, '窗口太小（至少 40x10）', Style(fg: theme.red));
+      p.text(1, 1, 'Terminal too small (minimum 40x10)', Style(fg: theme.red));
       _hits = List<Hit>.unmodifiable(p.hits);
       terminal.write(_renderer.render(_screen));
       return;
@@ -389,7 +388,7 @@ class App implements AppContext {
     final x = nameWidth + 3;
     const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
     final label = _busy
-        ? '${frames[_spinnerFrame]} ${_busyLabel ?? '处理中'}'
+        ? '${frames[_spinnerFrame]} ${_busyLabel ?? 'Working...'}'
         : repo.activeName ?? 'v$appVersion';
     p.text(x, 0, truncate(label, statusX - x - 1),
         Style(fg: _busy ? theme.yellow : theme.muted, bg: theme.header));
@@ -412,10 +411,10 @@ class App implements AppContext {
 
   String _statusText() {
     final status = _coreStatus;
-    if (status == null) return '检测中';
-    if (!status.running) return '未运行';
+    if (status == null) return 'Checking';
+    if (!status.running) return 'Stopped';
     final version = status.version == null ? '' : ' ${status.version}';
-    return '运行中$version';
+    return 'Running$version';
   }
 
   int _statusColor() {
@@ -427,7 +426,7 @@ class App implements AppContext {
   }
 
   void _drawSidebar(Painter p, Rect rect) {
-    p.drawBox(rect, focused: _sidebarFocused, title: '导航');
+    p.drawBox(rect, focused: _sidebarFocused, title: 'Navigation');
     final innerX = rect.x + 2;
     final innerWidth = rect.width - 4;
     var y = rect.y + 1;
@@ -472,25 +471,25 @@ class App implements AppContext {
     // Bottom summary: core and profile state.
     final summary = <(String, String, Style)>[
       (
-        '状态',
-        _coreStatus?.running == true ? '运行中' : '未运行',
+        'Status',
+        _coreStatus?.running == true ? 'Running' : 'Stopped',
         Style(fg: _statusColor(), bg: theme.panel, bold: true),
       ),
       (
-        '版本',
+        'Version',
         _coreStatus?.version ?? '-',
         Style(fg: theme.muted, bg: theme.panel)
       ),
       (
-        '配置',
-        repo.activeName ?? '未选择',
+        'Config',
+        repo.activeName ?? 'None',
         Style(fg: theme.accentSoft, bg: theme.panel)
       ),
       (
-        '控制器',
+        'Controller',
         _apiOnline
-            ? '已连接'
-            : (_activeInfo?.externalController == null ? '-' : '未连接'),
+            ? 'Connected'
+            : (_activeInfo?.externalController == null ? '-' : 'Offline'),
         Style(fg: _apiOnline ? theme.green : theme.muted, bg: theme.panel),
       ),
     ];
@@ -523,10 +522,10 @@ class App implements AppContext {
   void _drawBottomBar(Painter p, int width, int height) {
     final y = height - 1;
     final help = width < 56
-        ? '? 帮助  q 退出'
+        ? '? Help  q Quit'
         : _sidebarFocused
-            ? 'Tab 内容区  ? 帮助  q 退出'
-            : 'Esc 导航  ? 帮助  q 退出';
+            ? 'Tab Content  ? Help  q Quit'
+            : 'Esc Navigation  ? Help  q Quit';
     final helpX = width - textWidth(help) - 1;
     p.fill(Rect(0, y, width, 1), Style(bg: theme.header));
     var x = 1;
@@ -546,9 +545,9 @@ class App implements AppContext {
     final view = views[_viewIndex];
     final hints = _sidebarFocused
         ? const [
-            KeyHint('上下', '选择'),
-            KeyHint('Enter', '打开'),
-            KeyHint('Tab', '内容区'),
+            KeyHint('↑↓', 'Select'),
+            KeyHint('Enter', 'Open'),
+            KeyHint('Tab', 'Content'),
           ]
         : view.hints(this);
     for (final hint in hints) {
@@ -730,73 +729,74 @@ class App implements AppContext {
     final view = views[_viewIndex];
     showOverlay(HelpOverlay([
       (
-        '全局',
+        'Global',
         const [
-          KeyHint('Tab', '在侧栏与内容区之间切换'),
-          KeyHint('1-5', '直接跳转到对应页面'),
-          KeyHint('?', '打开/关闭本帮助'),
-          KeyHint('h', '隐藏面板（核心继续后台运行）'),
-          KeyHint('q', '退出程序'),
-          KeyHint('上下 / 滚轮', '移动或滚动'),
-          KeyHint('Enter', '确认 / 执行'),
-          KeyHint('Esc', '取消 / 返回'),
-          KeyHint('Ctrl+C / V', '文本框中复制 / 粘贴'),
-          KeyHint('Ctrl+A / X', '全选 / 剪切'),
-          KeyHint('Shift+方向键', '在文本框中选中文本'),
+          KeyHint('Tab', 'Switch focus between navigation and content'),
+          KeyHint('1-5', 'Jump to a page'),
+          KeyHint('?', 'Toggle keyboard shortcuts'),
+          KeyHint('h', 'Hide the interface, keep the core running'),
+          KeyHint('q', 'Quit the interface'),
+          KeyHint('↑↓ / Wheel', 'Navigate or scroll'),
+          KeyHint('Enter', 'Confirm or run'),
+          KeyHint('Esc', 'Cancel or back'),
+          KeyHint('Ctrl+C / V', 'Copy or paste in a text field'),
+          KeyHint('Ctrl+A / X', 'Select all or cut'),
+          KeyHint('Shift+Arrow', 'Select text in a field'),
         ],
       ),
-      ('当前页面 | ${view.label}', view.hints(this)),
+      ('Current page | ${view.label}', view.hints(this)),
       (
-        '订阅',
+        'Profiles',
         const [
-          KeyHint('a', '添加订阅（输入地址与名称）'),
-          KeyHint('Enter', '启用订阅（复制为 config.yaml）'),
-          KeyHint('u / U', '更新选中 / 全部订阅'),
-          KeyHint('r', '重命名'),
-          KeyHint('d', '删除'),
-          KeyHint('e', '编辑订阅信息（名称 / 订阅地址）'),
-          KeyHint('E', '编辑订阅配置文件（profiles/<名称>.yaml）'),
-          KeyHint('i', '查看配置详情'),
-          KeyHint('双击', '启用订阅'),
-        ],
-      ),
-      (
-        '代理',
-        const [
-          KeyHint('Tab / 左右', '切换代理组与节点列'),
-          KeyHint('Enter', '选择节点'),
-          KeyHint('t', '测试当前节点延迟'),
-          KeyHint('T', '测速当前代理组全部节点（Esc 取消）'),
+          KeyHint('a', 'Add a profile with a URL and name'),
+          KeyHint('Enter', 'Activate a profile as config.yaml'),
+          KeyHint('u / U', 'Refresh the selected profile or all profiles'),
+          KeyHint('r', 'Rename'),
+          KeyHint('d', 'Delete'),
+          KeyHint('e', 'Edit the profile name and URL'),
+          KeyHint('E', 'Edit the YAML in profiles/<name>.yaml'),
+          KeyHint('i', 'View profile details'),
+          KeyHint('Double-click', 'Activate profile'),
         ],
       ),
       (
-        '概览',
+        'Proxies',
         const [
-          KeyHint('s', '启动 / 停止核心'),
-          KeyHint('R', '重启核心'),
-          KeyHint('r', '热重载配置'),
-          KeyHint('m', '循环切换模式'),
-          KeyHint('o', '打开控制面板'),
-          KeyHint('p', '一键切换系统代理'),
+          KeyHint('Tab / ←→', 'Switch between group and node columns'),
+          KeyHint('Enter', 'Select node'),
+          KeyHint('t', 'Test selected node'),
+          KeyHint('T', 'Test all nodes in the group (Esc to cancel)'),
         ],
       ),
       (
-        '日志',
+        'Overview',
         const [
-          KeyHint('s', '循环视图：标准 / 精简'),
-          KeyHint('Enter', '查看选中日志的详情'),
-          KeyHint('f', '跟随开关（跟随时不显示 > 列）'),
-          KeyHint('r', '重新读取'),
-          KeyHint('c', '清空日志'),
-          KeyHint('g / G', '跳到开头 / 结尾'),
+          KeyHint('s', 'Start or stop the core'),
+          KeyHint('R', 'Restart core'),
+          KeyHint('r', 'Reload the config'),
+          KeyHint('m', 'Cycle modes'),
+          KeyHint('o', 'Open dashboard'),
+          KeyHint('p', 'Toggle system proxy'),
         ],
       ),
       (
-        '设置',
+        'Logs',
         const [
-          KeyHint('Enter', '编辑条目 / 切换主题色 / 明暗模式'),
-          KeyHint('d', '重新检测核心'),
-          KeyHint('i', '关于'),
+          KeyHint('s', 'Switch between Standard and Compact'),
+          KeyHint('Enter', 'Show details for the selected log entry'),
+          KeyHint('f',
+              'Toggle follow mode. The selection marker is hidden while following.'),
+          KeyHint('r', 'Reload logs'),
+          KeyHint('c', 'Clear logs'),
+          KeyHint('g / G', 'Jump to beginning or end'),
+        ],
+      ),
+      (
+        'Settings',
+        const [
+          KeyHint('Enter', 'Edit a setting or change colors'),
+          KeyHint('d', 'Detect the core again'),
+          KeyHint('i', 'About'),
         ],
       ),
     ]));
@@ -837,7 +837,7 @@ class App implements AppContext {
     required String title,
     required String message,
     List<String> detail = const [],
-    String confirmLabel = '确认',
+    String confirmLabel = 'Confirm',
     bool danger = false,
     required void Function() onConfirm,
   }) {
@@ -856,7 +856,8 @@ class App implements AppContext {
     Future<void> Function() action,
   ) async {
     if (_busy) {
-      toast('请等待当前操作完成', level: ToastLevel.warning);
+      toast('Wait for the current action to finish.',
+          level: ToastLevel.warning);
       return;
     }
     _busy = true;
@@ -896,7 +897,9 @@ class App implements AppContext {
         await _refreshServiceSnapshot();
       } while (_refreshRequested && !_exiting);
     } catch (error) {
-      if (!_exiting) toast('刷新状态失败：$error', level: ToastLevel.error);
+      if (!_exiting) {
+        toast('Status refresh failed: $error', level: ToastLevel.error);
+      }
     } finally {
       _serviceRefresh = null;
       _dirty = true;
@@ -967,7 +970,8 @@ class App implements AppContext {
   Future<void> toggleAllowLan() async {
     final api = apiRef;
     if (api == null) {
-      toast('控制器未连接，无法切换局域网代理', level: ToastLevel.warning);
+      toast('Connect the controller to change the LAN proxy setting.',
+          level: ToastLevel.warning);
       return;
     }
     final enabled = _apiConfig?.allowLan ?? false;
@@ -975,11 +979,11 @@ class App implements AppContext {
       await api.setAllowLan(!enabled);
       await _refreshServices();
       toast(
-        !enabled ? '已开启局域网代理' : '已关闭局域网代理',
+        !enabled ? 'LAN proxy enabled.' : 'LAN proxy disabled.',
         level: ToastLevel.success,
       );
     } on ApiException catch (error) {
-      toast('切换失败：${error.message}', level: ToastLevel.error);
+      toast('Switch failed: ${error.message}', level: ToastLevel.error);
     }
   }
 
@@ -1012,32 +1016,33 @@ class App implements AppContext {
     final target = core.resolveBinary() ?? CoreUpdater.defaultInstallPath();
     CoreRelease? release;
     final current = _coreStatus?.version ?? await core.version();
-    await _runBusy('检查内核更新', () async {
+    await _runBusy('Check for core updates', () async {
       try {
-        _busyLabel = '查询最新版本~';
+        _busyLabel = 'Looking up the latest version...';
         _dirty = true;
         release = await updater.latest();
       } on CoreUpdateException catch (error) {
-        toast('检查更新失败：${error.message}', level: ToastLevel.error);
+        toast('Update check failed: ${error.message}', level: ToastLevel.error);
         return;
       }
     });
     final found = release;
     if (found == null) return;
     if (_sameVersion(current, found.tag)) {
-      toast('已是最新版 ${found.tag}', level: ToastLevel.success);
+      toast('Already on the latest version ${found.tag}',
+          level: ToastLevel.success);
       return;
     }
     confirm(
-      title: '发现新版本',
-      message: '${current ?? '未安装'} → ${found.tag}',
+      title: 'Update available',
+      message: '${current ?? 'Not installed'} → ${found.tag}',
       detail: [
-        '平台/架构：${CoreUpdater.platformLabel}',
-        '下载源：${updater.mirror.label}',
-        '目标路径：$target',
-        '原文件会备份为 .bak',
+        'Platform/arch: ${CoreUpdater.platformLabel}',
+        'Download source: ${updater.mirror.label}',
+        'Target: $target',
+        'The previous binary will be saved as .bak.',
       ],
-      confirmLabel: '下载并安装',
+      confirmLabel: 'Download and install',
       onConfirm: () => unawaited(_runCoreUpdate(updater, target, found)),
     );
   }
@@ -1056,30 +1061,30 @@ class App implements AppContext {
   ) async {
     final before = _coreStatus?.version;
     final wasRunning = _coreStatus?.running ?? false;
-    await _runBusy('更新内核', () async {
+    await _runBusy('Update core', () async {
       try {
         if (wasRunning) {
           // A running core keeps its binary busy; stop it first.
-          _busyLabel = '停止核心~';
+          _busyLabel = 'Stopping the core...';
           _dirty = true;
           await _disableSystemProxyForCore();
           await core.stop();
           await Future<void>.delayed(const Duration(milliseconds: 300));
         }
-        _busyLabel = '下载 ${release.assetName}';
+        _busyLabel = 'Download ${release.assetName}';
         _dirty = true;
         final result = await updater.install(
           release,
           targetPath: target,
           onProgress: (received, total) {
             _busyLabel = total == null
-                ? '下载 ${formatBytes(received)}'
-                : '下载 ${formatBytes(received)} / ${formatBytes(total)}';
+                ? 'Download ${formatBytes(received)}'
+                : 'Download ${formatBytes(received)} / ${formatBytes(total)}';
             _dirty = true;
           },
         );
         if (wasRunning) {
-          _busyLabel = '重启核心~';
+          _busyLabel = 'Restarting the core...';
           _dirty = true;
           final started = await core.start();
           await _refreshServices();
@@ -1088,13 +1093,13 @@ class App implements AppContext {
           await _refreshServices();
         }
         toast(
-          '内核已更新：${before ?? '未安装'} -> ${result.version}',
+          'Core updated: ${before ?? 'Not installed'} -> ${result.version}',
           level: ToastLevel.success,
         );
       } on CoreUpdateException catch (error) {
-        toast('更新失败：${error.message}', level: ToastLevel.error);
+        toast('Update failed: ${error.message}', level: ToastLevel.error);
       } catch (error) {
-        toast('更新失败：$error', level: ToastLevel.error);
+        toast('Update failed: $error', level: ToastLevel.error);
       }
     });
   }
@@ -1113,7 +1118,8 @@ class App implements AppContext {
       probing: isMirrorProbing,
       onSelect: (id) {
         unawaited(applySettings(_settings.copyWith(mirror: id)));
-        toast('下载镜像：${mirrorById(id).label}', level: ToastLevel.success);
+        toast('Download mirror: ${mirrorById(id).label}',
+            level: ToastLevel.success);
       },
       onRefresh: () => unawaited(_probeMirrors(force: true)),
     ));
@@ -1166,34 +1172,36 @@ class App implements AppContext {
   Future<void> toggleAutostart() async {
     final autostart = _autostartOrNull();
     if (autostart == null) {
-      toast('未找到 mihomo 可执行文件，无法创建自启服务', level: ToastLevel.warning);
+      toast('Set the Mihomo executable path before enabling autostart.',
+          level: ToastLevel.warning);
       return;
     }
     if (_autostartState == AutostartState.enabled) {
       confirm(
-        title: '关闭开机自启',
-        message: '将停用并删除 mihomo 的自启服务，之后不再随登录自动启动。',
-        confirmLabel: '关闭自启',
+        title: 'Disable autostart',
+        message: 'Remove Mihomo from startup at sign-in.',
+        confirmLabel: 'Disable autostart',
         danger: true,
         onConfirm: () => unawaited(_applyAutostart(autostart, false)),
       );
       return;
     }
     confirm(
-      title: '开启开机自启',
-      message: '创建一个随登录启动 mihomo 的服务（Linux 为 systemd 用户服务，Windows 为注册表 Run 项）。',
+      title: 'Enable autostart',
+      message:
+          'Start Mihomo at sign-in using a systemd user service or Windows Run entry.',
       detail: const [
-        '服务会直接读取当前生效的 config.yaml。',
-        '若希望未登录时也启动，可执行：sudo loginctl enable-linger \$USER',
-        '开启后请不要在概览里重复手动启动同一个核心。',
+        'The service reads the active config.yaml.',
+        'To also start before sign-in on Linux, run sudo loginctl enable-linger \$USER',
+        'After enabling autostart, let it manage the core process.',
       ],
-      confirmLabel: '开启自启',
+      confirmLabel: 'Enable autostart',
       onConfirm: () => unawaited(_applyAutostart(autostart, true)),
     );
   }
 
   Future<void> _applyAutostart(Autostart autostart, bool enable) async {
-    await _runBusy(enable ? '安装自启服务' : '移除自启服务', () async {
+    await _runBusy(enable ? 'Enable autostart' : 'Disable autostart', () async {
       final result =
           enable ? await autostart.enable() : await autostart.disable();
       _autostartChecked = DateTime.fromMillisecondsSinceEpoch(0);
@@ -1309,24 +1317,25 @@ class App implements AppContext {
   @override
   Future<void> startCore() async {
     if (core.resolveBinary() == null) {
-      toast('未找到 mihomo 可执行文件，请在「设置」中指定路径', level: ToastLevel.error);
+      toast('Set the Mihomo executable path in Settings.',
+          level: ToastLevel.error);
       return;
     }
     if (repo.activeName == null && !File(paths.mihomoConfigFile).existsSync()) {
-      toast('请先在「订阅」中选择一个配置', level: ToastLevel.warning);
+      toast('Activate a profile first.', level: ToastLevel.warning);
       return;
     }
     final status = _coreStatus;
     if (status?.running == true) {
       final external = status?.pidFromFile == false;
       confirm(
-        title: '已有 mihomo 在运行',
-        message: '检测到 pid ${status?.pid} 的 mihomo 进程'
-            '${external ? '（由其他程序启动）' : ''}，需要先结束它才能启动新的实例。',
+        title: 'Mihomo is already running',
+        message: 'Mihomo PID ${status?.pid}'
+            '${external ? ' (started by another app)' : ''} must stop before starting a new instance.',
         detail: external
-            ? const ['如果该进程由 mihomo-party 等工具托管，结束它可能影响那些程序。']
+            ? const ['Stopping this process may affect its managing app.']
             : const [],
-        confirmLabel: '结束并启动',
+        confirmLabel: 'Stop and start',
         danger: true,
         onConfirm: () => unawaited(_startCoreNow(stopFirst: true)),
       );
@@ -1336,26 +1345,27 @@ class App implements AppContext {
   }
 
   Future<void> _startCoreNow({bool stopFirst = false}) async {
-    await _runBusy('启动核心', () async {
+    await _runBusy('Start core', () async {
       if (stopFirst) {
         await core.stop();
         await Future<void>.delayed(const Duration(milliseconds: 300));
       }
       final result = await core.start();
       if (!result.isSuccess) {
-        _reportCoreError('启动失败', result.error ?? '未知错误');
+        _reportCoreError('Start failed', result.error ?? 'Unknown error');
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
       await _refreshServices();
       if (_coreStatus?.running == true) {
         toast(
-          'mihomo 已启动${_coreStatus?.pid == null ? '' : '，pid ${_coreStatus!.pid}'}',
+          'Mihomo started${_coreStatus?.pid == null ? '' : ', PID ${_coreStatus!.pid}'}',
           level: ToastLevel.success,
         );
         await _enableSystemProxyForCore();
       } else {
-        toast('mihomo 启动后退出，请查看「日志」', level: ToastLevel.error);
+        toast('Mihomo exited after startup. Check Logs.',
+            level: ToastLevel.error);
       }
     });
   }
@@ -1365,10 +1375,12 @@ class App implements AppContext {
     final status = _coreStatus;
     if (status?.running == true && !status!.pidFromFile) {
       confirm(
-        title: '结束外部进程',
-        message: 'pid ${status.pid} 的 mihomo 不是由 mihomo-tui 启动的，确定要结束它吗？',
-        detail: const ['如果它由 mihomo-party 等工具托管，那些程序会失去代理内核。'],
-        confirmLabel: '结束进程',
+        title: 'Stop an external process',
+        message: 'Mihomo PID ${status.pid} is managed by another app. Stop it?',
+        detail: const [
+          'Stopping it will interrupt the app using that process.'
+        ],
+        confirmLabel: 'Stop process',
         danger: true,
         onConfirm: () => unawaited(_stopCoreNow()),
       );
@@ -1378,14 +1390,14 @@ class App implements AppContext {
   }
 
   Future<void> _stopCoreNow() async {
-    await _runBusy('停止核心', () async {
+    await _runBusy('Stop core', () async {
       final stopped = await core.stop();
-      await _disableSystemProxyForCore();
+      if (stopped) await _disableSystemProxyForCore();
       await _refreshServices();
       if (stopped) {
-        toast('已停止 mihomo', level: ToastLevel.success);
+        toast('Mihomo stopped.', level: ToastLevel.success);
       } else {
-        toast('没有找到运行中的 mihomo 进程', level: ToastLevel.warning);
+        toast('No running Mihomo process found.', level: ToastLevel.warning);
       }
     });
   }
@@ -1401,10 +1413,9 @@ class App implements AppContext {
       socksPort: info?.socksPort ?? port,
     );
     if (!result.ok) return;
-    _proxyManagedByCore = true;
     _systemProxyState = SystemProxyState.enabled;
     _systemProxyChecked = DateTime.now();
-    toast('已同时开启系统代理', level: ToastLevel.success);
+    toast('System proxy enabled.', level: ToastLevel.success);
     _dirty = true;
   }
 
@@ -1414,35 +1425,37 @@ class App implements AppContext {
     final state = await SystemProxy.currentState();
     if (state != SystemProxyState.enabled) return;
     final ourPort = _activeInfo?.preferredProxyPort;
-    final currentPort = await SystemProxy.currentHttpPort();
-    final ours = _proxyManagedByCore ||
-        (ourPort != null && currentPort != null && currentPort == ourPort);
+    final ours = ourPort != null && await SystemProxy.pointsToLoopback(ourPort);
     if (!ours) return;
     final result = await SystemProxy.disable();
     if (!result.ok) return;
-    _proxyManagedByCore = false;
     _systemProxyState = SystemProxyState.disabled;
     _systemProxyChecked = DateTime.now();
-    toast('已同时关闭系统代理', level: ToastLevel.success);
+    toast('System proxy disabled.', level: ToastLevel.success);
     _dirty = true;
   }
 
   @override
   Future<void> restartCore() async {
-    await _runBusy('重启核心', _restartCoreNow);
+    await _runBusy('Restart core', _restartCoreNow);
   }
 
   Future<void> _restartCoreNow() async {
-    await core.stop();
+    final wasRunning = core.detectPid() != null;
+    if (!await core.stop() && wasRunning) {
+      toast('Could not stop the running core.', level: ToastLevel.error);
+      return;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 400));
     final result = await core.start();
     await _refreshServices();
     if (result.isSuccess && _coreStatus?.running == true) {
       toast(
-          'mihomo 已重启${_coreStatus?.pid == null ? '' : '，pid ${_coreStatus!.pid}'}',
+          'Mihomo restarted${_coreStatus?.pid == null ? '' : ', PID ${_coreStatus!.pid}'}',
           level: ToastLevel.success);
     } else {
-      _reportCoreError('重启失败', result.error ?? '核心启动后已退出');
+      _reportCoreError(
+          'Restart failed', result.error ?? 'Mihomo exited after startup.');
     }
   }
 
@@ -1453,7 +1466,7 @@ class App implements AppContext {
         .where((line) => line.isNotEmpty)
         .toList();
     if (lines.length <= 1) {
-      toast('$title：${lines.isEmpty ? detail : lines.first}',
+      toast('$title: ${lines.isEmpty ? detail : lines.first}',
           level: ToastLevel.error);
       return;
     }
@@ -1462,8 +1475,8 @@ class App implements AppContext {
       lines: [
         ...lines,
         '',
-        '完整日志：${paths.logFile}',
-        '可在「设置」中确认 mihomo 可执行文件路径。',
+        'Full logs: ${paths.logFile}',
+        'Check the Mihomo executable path in Settings.',
       ],
     ));
   }
@@ -1472,15 +1485,15 @@ class App implements AppContext {
   Future<void> reloadConfig() async {
     final api = apiRef;
     if (api == null) {
-      toast('控制器未连接', level: ToastLevel.warning);
+      toast('Controller offline', level: ToastLevel.warning);
       return;
     }
-    await _runBusy('重新加载配置', () async {
+    await _runBusy('Reload config', () async {
       try {
         await api.reload();
-        toast('配置已重新加载', level: ToastLevel.success);
+        toast('Configuration reloaded.', level: ToastLevel.success);
       } on ApiException catch (error) {
-        toast('重新加载失败：${error.message}', level: ToastLevel.error);
+        toast('Reload failed: ${error.message}', level: ToastLevel.error);
       }
       await _refreshServices();
     });
@@ -1490,15 +1503,15 @@ class App implements AppContext {
   Future<void> setMode(String mode) async {
     final api = apiRef;
     if (api == null) {
-      toast('控制器未连接', level: ToastLevel.warning);
+      toast('Controller offline', level: ToastLevel.warning);
       return;
     }
     try {
       await api.setMode(mode);
       await _refreshServices();
-      toast('模式已切换为 $mode', level: ToastLevel.success);
+      toast('Mode set to $mode', level: ToastLevel.success);
     } on ApiException catch (error) {
-      toast('切换模式失败：${error.message}', level: ToastLevel.error);
+      toast('Mode change failed: ${error.message}', level: ToastLevel.error);
     }
   }
 
@@ -1506,7 +1519,7 @@ class App implements AppContext {
   Future<void> activateProfile(Profile profile) async {
     final running = _coreStatus?.running ?? false;
     if (profile.name == repo.activeName && running) {
-      toast('「${profile.name}」已经是当前配置');
+      toast('${profile.name} is already active.');
       return;
     }
     void apply() {
@@ -1514,30 +1527,31 @@ class App implements AppContext {
         repo.activate(profile);
         _activeInfoKey = null;
         _dirty = true;
-        toast('已启用「${profile.name}」', level: ToastLevel.success);
+        toast('Activated ${profile.name}', level: ToastLevel.success);
         if (running) {
           confirm(
-            title: '重启核心',
-            message: '配置已切换为「${profile.name}」，是否立即重启 mihomo 使其生效？',
-            confirmLabel: '重启',
+            title: 'Restart core',
+            message: 'Restart Mihomo to apply ${profile.name}?',
+            confirmLabel: 'Restart',
             onConfirm: () => unawaited(restartCore()),
           );
         }
         unawaited(refresh());
       } catch (error) {
-        toast('启用失败：$error', level: ToastLevel.error);
+        toast('Activation failed: $error', level: ToastLevel.error);
       }
     }
 
     if (running) {
       confirm(
-        title: '切换配置',
-        message: 'mihomo 正在运行，切换配置会覆盖 mihomo 的 config.yaml。',
+        title: 'Switch profile',
+        message:
+            'Mihomo is running. Switching profiles will replace config.yaml.',
         detail: [
-          '目标文件：${paths.mihomoConfigFile}',
-          '切换后需要重启核心才会生效，原配置会备份为 config.yaml.bak。',
+          'Target file: ${paths.mihomoConfigFile}',
+          'Restart to apply the profile. The previous config is kept as config.yaml.bak.',
         ],
-        confirmLabel: '切换',
+        confirmLabel: 'Switch',
         onConfirm: apply,
       );
     } else {
@@ -1547,21 +1561,21 @@ class App implements AppContext {
 
   @override
   Future<void> updateProfile(Profile profile) async {
-    await _runBusy('更新「${profile.name}」', () async {
+    await _runBusy('Refreshing ${profile.name}', () async {
       try {
         await repo.update(
           profile,
           onProgress: (progress) {
             final percent = progress.fraction;
             _busyLabel = percent == null
-                ? '更新「${profile.name}」 ${formatBytes(progress.received)}'
-                : '更新「${profile.name}」 ${(percent * 100).round()}%';
+                ? 'Refreshing ${profile.name} ${formatBytes(progress.received)}'
+                : 'Refreshing ${profile.name} ${(percent * 100).round()}%';
             _dirty = true;
           },
         );
         repo.invalidateCache(profile.name);
         _activeInfoKey = null;
-        toast('已更新「${profile.name}」', level: ToastLevel.success);
+        toast('Refreshed ${profile.name}', level: ToastLevel.success);
         if (profile.name == repo.activeName &&
             File(paths.mihomoConfigFile).existsSync()) {
           repo.activate(profile);
@@ -1569,7 +1583,7 @@ class App implements AppContext {
         }
         await _refreshServices();
       } on ProfileException catch (error) {
-        toast('更新失败：${error.message}', level: ToastLevel.error);
+        toast('Update failed: ${error.message}', level: ToastLevel.error);
       }
     });
   }
@@ -1578,39 +1592,39 @@ class App implements AppContext {
   Future<void> addProfileInteractive() async {
     showOverlay(FormOverlay(
       onChanged: requestFrame,
-      title: '添加订阅',
+      title: 'Add profile',
       description: const [
-        '填入 mihomo 订阅地址；下载后会校验 YAML 与节点数量。',
+        'Enter a Mihomo subscription URL. The YAML and node count will be checked.',
       ],
       fields: [
         FormFieldSpec(
           key: 'url',
-          label: '订阅地址',
+          label: 'ProfilesURL',
           hint: 'https://example.com/subscribe?token=...',
           required: true,
           validator: validateSubscriptionUrl,
         ),
         FormFieldSpec(
           key: 'name',
-          label: '配置名称',
-          hint: '例如 pm',
+          label: 'Profile name',
+          hint: 'Example: personal',
           required: true,
           validator: validateProfileName,
         ),
         FormFieldSpec(
           key: 'activate',
-          label: '添加后立即启用（覆盖 config.yaml）',
+          label: 'Activate after download (replaces config.yaml)',
           kind: FieldKind.toggle,
           initialToggle: repo.activeName == null,
         ),
         FormFieldSpec(
           key: 'start',
-          label: '启用后重启核心',
+          label: 'Restart the core after activation',
           kind: FieldKind.toggle,
           initialToggle: false,
         ),
       ],
-      submitLabel: '下载',
+      submitLabel: 'Download',
       onSubmit: (values) {
         final url = values['url']?.trim() ?? '';
         final name = values['name']?.trim() ?? '';
@@ -1627,7 +1641,7 @@ class App implements AppContext {
     bool activate,
     bool start,
   ) async {
-    await _runBusy('下载订阅', () async {
+    await _runBusy('Download profile', () async {
       try {
         await repo.add(
           name: name,
@@ -1635,29 +1649,32 @@ class App implements AppContext {
           onProgress: (progress) {
             final percent = progress.fraction;
             _busyLabel = percent == null
-                ? '下载订阅 ${formatBytes(progress.received)}'
-                : '下载订阅 ${(percent * 100).round()}% | ${formatBytes(progress.received)}';
+                ? 'Download profile ${formatBytes(progress.received)}'
+                : 'Download profile ${(percent * 100).round()}% | ${formatBytes(progress.received)}';
             _dirty = true;
           },
         );
         final profile = repo.byName(name);
-        if (profile == null) throw ProfileException('保存订阅失败');
+        if (profile == null) {
+          throw ProfileException('Could not save the profile.');
+        }
         final nodes = repo.cachedInfo(name)?.nodeCount;
         toast(
-          nodes == null ? '已添加「$name」' : '已添加「$name」，$nodes 个节点',
+          nodes == null ? 'Added $name' : 'Added $name with $nodes nodes.',
           level: ToastLevel.success,
         );
         if (activate) {
           repo.activate(profile);
           _activeInfoKey = null;
-          toast('已启用「$name」', level: ToastLevel.success);
+          toast('Activated $name', level: ToastLevel.success);
           if (start) {
             await _restartCoreNow();
           }
         }
         await _refreshServices();
       } on ProfileException catch (error) {
-        toast('添加失败：${error.message}', level: ToastLevel.error);
+        toast('Could not add profile: ${error.message}',
+            level: ToastLevel.error);
       }
     });
   }
@@ -1666,7 +1683,8 @@ class App implements AppContext {
   Future<void> editActiveConfig() async {
     final file = File(paths.mihomoConfigFile);
     if (!file.existsSync()) {
-      toast('还没有 config.yaml，请先启用一个订阅', level: ToastLevel.warning);
+      toast('Activate a profile to create config.yaml.',
+          level: ToastLevel.warning);
       return;
     }
     final edited = await _runEditor(file.path);
@@ -1684,15 +1702,16 @@ class App implements AppContext {
     _activeInfoKey = null;
     await _refreshServices();
     if (parseError != null) {
-      toast('config.yaml 解析失败：$parseError', level: ToastLevel.error);
+      toast('Could not parse config.yaml: $parseError',
+          level: ToastLevel.error);
       return;
     }
-    toast('已保存 ${paths.mihomoConfigFile}', level: ToastLevel.success);
+    toast('Saved ${paths.mihomoConfigFile}', level: ToastLevel.success);
     if (_apiOnline) {
       confirm(
-        title: '重新加载配置',
-        message: 'config.yaml 已修改，是否让运行中的 mihomo 立即热重载？',
-        confirmLabel: '热重载',
+        title: 'Reload config',
+        message: 'Reload the updated config.yaml in the running core?',
+        confirmLabel: 'Reload',
         onConfirm: () => unawaited(reloadConfig()),
       );
     }
@@ -1703,12 +1722,12 @@ class App implements AppContext {
   Future<String?> _runEditor(String file) async {
     final editor = paths.editor.trim();
     if (editor.isEmpty) {
-      toast('未配置编辑器，请在「设置」中填写', level: ToastLevel.warning);
+      toast('Set an editor in Settings.', level: ToastLevel.warning);
       return null;
     }
     final parts = splitCommand(editor);
     if (parts.isEmpty) {
-      toast('编辑器命令为空', level: ToastLevel.warning);
+      toast('Set an editor command in Settings.', level: ToastLevel.warning);
       return null;
     }
     _editing = true;
@@ -1721,9 +1740,9 @@ class App implements AppContext {
         mode: ProcessStartMode.inheritStdio,
       );
       final code = await process.exitCode;
-      if (code != 0) failure = '编辑器退出码 $code';
+      if (code != 0) failure = 'Editor exit code $code';
     } on ProcessException catch (error) {
-      failure = '无法启动编辑器：${error.message}';
+      failure = 'Could not start the editor: ${error.message}';
     } finally {
       if (!_exiting) terminal.resume();
       _editing = false;
@@ -1738,19 +1757,21 @@ class App implements AppContext {
   Future<void> editProfileMeta(Profile profile) async {
     showOverlay(FormOverlay(
       onChanged: requestFrame,
-      title: '编辑订阅信息',
-      description: const ['只修改名称与订阅地址，不会改动已下载的配置文件。'],
+      title: 'Edit profile details',
+      description: const [
+        'Edit the name and subscription URL independently of the downloaded YAML.'
+      ],
       fields: [
         FormFieldSpec(
           key: 'name',
-          label: '名称',
+          label: 'Name',
           initial: profile.name,
           required: true,
           validator: validateProfileName,
         ),
         FormFieldSpec(
           key: 'url',
-          label: '订阅地址',
+          label: 'ProfilesURL',
           initial: profile.url,
           hint: 'https://example.com/subscribe?token=...',
           required: true,
@@ -1758,11 +1779,11 @@ class App implements AppContext {
         ),
         FormFieldSpec(
           key: 'download',
-          label: '保存后立即重新下载订阅',
+          label: 'Download the profile again after saving',
           kind: FieldKind.toggle,
         ),
       ],
-      submitLabel: '保存',
+      submitLabel: 'Save',
       onSubmit: (values) {
         unawaited(_applyProfileMeta(profile, values));
       },
@@ -1780,11 +1801,12 @@ class App implements AppContext {
     try {
       updated = repo.updateMeta(profile, name: name, url: url);
     } catch (error) {
-      toast('保存失败：$error', level: ToastLevel.error);
+      toast('Save failed: $error', level: ToastLevel.error);
       return;
     }
     _activeInfoKey = null;
-    toast('已更新「${updated.name}」的订阅信息', level: ToastLevel.success);
+    toast('Updated profile details for ${updated.name}',
+        level: ToastLevel.success);
     if (download) {
       await updateProfile(updated);
     } else {
@@ -1804,23 +1826,23 @@ class App implements AppContext {
     }
     final error = repo.cachedError(profile.name);
     if (error != null) {
-      toast('配置解析失败：$error', level: ToastLevel.error);
+      toast('Configuration parse failed: $error', level: ToastLevel.error);
       return;
     }
-    toast('已保存「${profile.name}」', level: ToastLevel.success);
+    toast('Saved ${profile.name}', level: ToastLevel.success);
     if (profile.name == repo.activeName) {
       confirm(
-        title: '重新应用配置',
-        message: '订阅文件已修改，是否复制为 config.yaml 并重启核心？',
-        detail: ['目标文件：${paths.mihomoConfigFile}'],
-        confirmLabel: '应用',
+        title: 'Reapply profile',
+        message: 'Apply the updated profile as config.yaml and restart?',
+        detail: ['Target file: ${paths.mihomoConfigFile}'],
+        confirmLabel: 'Apply',
         onConfirm: () {
           try {
             repo.activate(profile);
             _activeInfoKey = null;
             unawaited(restartCore());
           } catch (error) {
-            toast('应用失败：$error', level: ToastLevel.error);
+            toast('Apply failed: $error', level: ToastLevel.error);
           }
         },
       );
@@ -1845,7 +1867,7 @@ class App implements AppContext {
         mode: ProcessStartMode.detached,
       ));
     } catch (error) {
-      toast('打开失败：$error', level: ToastLevel.error);
+      toast('Open failed: $error', level: ToastLevel.error);
     }
   }
 
@@ -1883,7 +1905,8 @@ class App implements AppContext {
     final index = order.indexOf(current);
     final next = order[(index + 1) % order.length];
     await applySettings(_settings.copyWith(accent: next));
-    toast('主题色：${Theme.accentLabel(next)}', level: ToastLevel.success);
+    toast('Accent color: ${Theme.accentLabel(next)}',
+        level: ToastLevel.success);
   }
 
   @override
@@ -1897,9 +1920,10 @@ class App implements AppContext {
     await applySettings(_settings.copyWith(colorMode: next));
     toast(
       switch (next) {
-        'auto' => '配色：跟随终端（${_theme.isLight ? '亮色' : '暗色'}）',
-        'light' => '配色：亮色',
-        _ => '配色：暗色',
+        'auto' =>
+          'Colors: terminal default (${_theme.isLight ? 'light' : 'dark'})',
+        'light' => 'Colors: light',
+        _ => 'Colors: dark',
       },
       level: ToastLevel.success,
     );
@@ -1909,17 +1933,24 @@ class App implements AppContext {
   Future<void> toggleSystemProxy() async {
     final state = await SystemProxy.currentState();
     if (state == SystemProxyState.unsupported) {
-      toast('当前环境不支持一键设置系统代理', level: ToastLevel.warning);
+      toast('System proxy controls are unavailable on this platform.',
+          level: ToastLevel.warning);
       return;
     }
     if (state == SystemProxyState.enabled) {
+      final port = _activeInfo?.mixedPort ?? _activeInfo?.port;
+      if (port == null || !await SystemProxy.pointsToLoopback(port)) {
+        toast('Another app owns the system proxy.', level: ToastLevel.warning);
+        return;
+      }
       await _disableSystemProxy();
       return;
     }
     final info = _activeInfo;
     final port = info?.preferredProxyPort;
     if (port == null) {
-      toast('当前配置没有可用的本地代理端口', level: ToastLevel.warning);
+      toast('The active config has no usable proxy port.',
+          level: ToastLevel.warning);
       return;
     }
     final result = await SystemProxy.enable(
@@ -1927,7 +1958,6 @@ class App implements AppContext {
       socksPort: info?.socksPort ?? port,
     );
     if (result.ok) {
-      _proxyManagedByCore = true;
       _systemProxyState = SystemProxyState.enabled;
       _systemProxyChecked = DateTime.now();
       _dirty = true;
@@ -1943,7 +1973,6 @@ class App implements AppContext {
   Future<void> _disableSystemProxy() async {
     final result = await SystemProxy.disable();
     if (result.ok) {
-      _proxyManagedByCore = false;
       _systemProxyState = SystemProxyState.disabled;
       _systemProxyChecked = DateTime.now();
       _dirty = true;
@@ -1958,16 +1987,16 @@ class App implements AppContext {
 
   @override
   Future<void> exportData() async {
-    await _runBusy('导出数据', () async {
+    await _runBusy('Export data', () async {
       try {
         final exporter = DataExporter(paths: paths, settings: _settings);
         final result = await exporter.export();
         toast(
-          '已导出 ${result.entries.length} 项（${formatBytes(result.bytes)}）到 ${result.file.path}',
+          'Exported ${result.entries.length} items (${formatBytes(result.bytes)}) to ${result.file.path}',
           level: ToastLevel.success,
         );
       } catch (error) {
-        toast('导出失败：$error', level: ToastLevel.error);
+        toast('Export failed: $error', level: ToastLevel.error);
       }
     });
   }

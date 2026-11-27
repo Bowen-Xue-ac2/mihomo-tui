@@ -27,19 +27,22 @@ ProxyNode? resolveSelectedNode(ProxySnapshot snapshot, ProxyNode group) {
 String? _clean(String? value) =>
     value == null || value.trim().isEmpty ? null : value.trim();
 
-/// Picks the group that the config's final `MATCH` rule points at, falling
-/// back to GLOBAL and then to the first available group.
-ProxyNode? defaultGroup(ProxySnapshot snapshot, String? matchTarget) {
-  if (matchTarget != null) {
-    final candidate = snapshot.nodes[matchTarget];
-    if (candidate != null && candidate.isGroup) return candidate;
-  }
-  final global = snapshot.nodes['GLOBAL'];
-  if (global != null && global.isGroup) {
-    return global;
-  }
-  if (snapshot.groups.isNotEmpty) {
-    return snapshot.nodes[snapshot.groups.first.name];
-  }
-  return null;
+/// Returns the outbound for the live mode or the MATCH fallback in rule mode.
+String? selectedOutbound(
+  ProxySnapshot? snapshot, {
+  required String? mode,
+  required String? matchTarget,
+}) {
+  if (mode == 'direct') return 'DIRECT';
+  final target = switch (mode) {
+    'global' => 'GLOBAL',
+    'rule' => matchTarget,
+    _ => null,
+  };
+  if (target == null || snapshot == null) return null;
+  final node = snapshot.nodes[target];
+  if (node == null) return null;
+  return node.isGroup
+      ? resolveSelectedNode(snapshot, node)?.name ?? node.now
+      : node.name;
 }

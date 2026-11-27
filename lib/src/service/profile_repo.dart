@@ -117,7 +117,7 @@ class ProfileRepository {
   ProfileInfo loadInfo(String name) {
     final file = File(profileFile(name));
     if (!file.existsSync()) {
-      throw ProfileException('配置「$name」文件不存在');
+      throw ProfileException('Profile file is missing: $name');
     }
     final content = file.readAsStringSync();
     try {
@@ -129,7 +129,9 @@ class ProfileRepository {
 
   String readContent(String name) {
     final file = File(profileFile(name));
-    if (!file.existsSync()) throw ProfileException('配置「$name」文件不存在');
+    if (!file.existsSync()) {
+      throw ProfileException('Profile file is missing: $name');
+    }
     return file.readAsStringSync();
   }
 
@@ -142,7 +144,9 @@ class ProfileRepository {
     if (nameError != null) throw ProfileException(nameError);
     final urlError = validateSubscriptionUrl(url);
     if (urlError != null) throw ProfileException(urlError);
-    if (byName(name) != null) throw ProfileException('已存在同名配置「$name」');
+    if (byName(name) != null) {
+      throw ProfileException('A profile named $name already exists.');
+    }
     final normalizedUrl = normalizeHttpUri(url)!.toString();
 
     final target = File(profileFile(name));
@@ -163,7 +167,8 @@ class ProfileRepository {
         info.providerCount == 0 &&
         info.groupCount == 0) {
       if (target.existsSync()) target.deleteSync();
-      throw ProfileException('订阅中没有找到任何节点或代理组');
+      throw ProfileException(
+          'The subscription contains no nodes or proxy groups.');
     }
     data.profiles.add(Profile(
       name: name,
@@ -222,7 +227,9 @@ class ProfileRepository {
 
     var current = profile;
     if (name != profile.name) {
-      if (byName(name) != null) throw ProfileException('已存在同名配置「$name」');
+      if (byName(name) != null) {
+        throw ProfileException('A profile named $name already exists.');
+      }
       rename(profile, name);
       current = byName(name)!;
     }
@@ -239,7 +246,9 @@ class ProfileRepository {
     final error = validateProfileName(newName);
     if (error != null) throw ProfileException(error);
     if (newName == profile.name) return;
-    if (byName(newName) != null) throw ProfileException('已存在同名配置「$newName」');
+    if (byName(newName) != null) {
+      throw ProfileException('A profile named $newName already exists.');
+    }
     final from = File(profileFile(profile.name));
     if (from.existsSync()) {
       from.renameSync(profileFile(newName));
@@ -267,7 +276,7 @@ class ProfileRepository {
   void activate(Profile profile) {
     final source = File(profileFile(profile.name));
     if (!source.existsSync()) {
-      throw ProfileException('配置「${profile.name}」文件不存在');
+      throw ProfileException('Profile file is missing: ${profile.name}');
     }
     try {
       ProfileInfo.parse(source.readAsStringSync());
@@ -333,10 +342,10 @@ class ProfileRepository {
     try {
       final dynamic document = loadYaml(content);
       if (document is! YamlMap) {
-        throw const FormatException('配置文件顶层不是映射（map）');
+        throw const FormatException('The YAML root must be a mapping.');
       }
     } on YamlException catch (error) {
-      throw FormatException('配置不是合法的 YAML：${error.message}');
+      throw FormatException('Invalid YAML: ${error.message}');
     }
     return ProfileInfo.parse(content);
   }

@@ -173,8 +173,10 @@ class MihomoCore {
 
   String get binaryError {
     final explicit = explicitBinaryPath;
-    if (explicit != null) return '指定的 mihomo 路径不可执行：$explicit';
-    return '未找到 mihomo 可执行文件';
+    if (explicit != null) {
+      return 'The specified Mihomo executable cannot run: $explicit';
+    }
+    return 'Mihomo executable not found';
   }
 
   Future<String?> version({bool refresh = false}) async {
@@ -244,7 +246,7 @@ class MihomoCore {
   /// Detects the running pid from the pid file, falling back to a process scan.
   ///
   /// [fromFile] is false when the process was started outside of mihomo-tui,
-  /// which the UI surfaces as "外部进程" so that stopping it stays explicit.
+  /// which the UI flags as an external process before offering to stop it.
   ({int? pid, bool fromFile}) detectProcess({bool allowScan = true}) {
     final stored = readPidFile();
     if (stored != null) {
@@ -311,7 +313,7 @@ class MihomoCore {
   Future<LaunchResult> start() async {
     final binary = resolveBinary();
     if (binary == null) {
-      return LaunchResult(error: '$binaryError，请在「设置」中指定路径');
+      return LaunchResult(error: '$binaryError. Set its path in Settings.');
     }
     if (!Directory(paths.mihomoHome).existsSync()) {
       Directory(paths.mihomoHome).createSync(recursive: true);
@@ -319,7 +321,7 @@ class MihomoCore {
     final config = File(paths.mihomoConfigFile);
     if (!config.existsSync()) {
       return LaunchResult(
-        error: '配置文件不存在：${config.path}，请先选择一个订阅',
+        error: 'Configuration missing: ${config.path}. Select a profile first.',
       );
     }
     _rotateLogIfNeeded();
@@ -336,7 +338,7 @@ class MihomoCore {
       workingDirectory: paths.mihomoHome,
     );
     if (!result.isSuccess) {
-      return LaunchResult(error: result.error ?? '启动失败');
+      return LaunchResult(error: result.error ?? 'Start failed');
     }
     writePidFile(result.pid!);
     // Give the process a moment, then verify it did not exit immediately.
@@ -345,7 +347,9 @@ class MihomoCore {
       clearPidFile();
       final tail = readLogTail(lines: 8, fromOffset: logOffset);
       return LaunchResult(
-        error: tail.isEmpty ? 'mihomo 启动后立即退出' : tail.join('\n'),
+        error: tail.isEmpty
+            ? 'Mihomo exited immediately after startup.'
+            : tail.join('\n'),
       );
     }
     return result;
@@ -358,7 +362,7 @@ class MihomoCore {
       return false;
     }
     final ok = await _launcher.terminate(pid);
-    clearPidFile();
+    if (ok || !_launcher.isAlive(pid)) clearPidFile();
     return ok;
   }
 

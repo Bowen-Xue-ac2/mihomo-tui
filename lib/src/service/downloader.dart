@@ -124,7 +124,7 @@ class Downloader {
   }) async {
     final uri = normalizeHttpUri(url);
     if (uri == null) {
-      throw DownloadException('订阅地址无效：$url');
+      throw DownloadException('Invalid subscription URL: $url');
     }
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
@@ -140,16 +140,17 @@ class Downloader {
         request = await client.getUrl(uri).timeout(const Duration(seconds: 20));
       } on FormatException catch (error) {
         throw DownloadException(
-          '订阅地址无法解析（主机名可能包含中文或 % 编码）：${error.message}',
+          'Could not resolve the subscription hostname. Check its encoding: ${error.message}',
         );
       } on ArgumentError catch (error) {
-        throw DownloadException('订阅地址无法解析：${error.message}');
+        throw DownloadException(
+            'Could not resolve the subscription hostname: ${error.message}');
       }
       request.headers.set(HttpHeaders.acceptHeader, '*/*');
       final response =
           await request.close().timeout(const Duration(seconds: 30));
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw DownloadException('服务器返回 HTTP ${response.statusCode}');
+        throw DownloadException('Server returned HTTP ${response.statusCode}');
       }
       final total = response.contentLength >= 0 ? response.contentLength : null;
       final userInfo = SubscriptionInfo.parse(
@@ -162,9 +163,9 @@ class Downloader {
       final deadline = DateTime.now().add(const Duration(minutes: 3));
       try {
         await for (final chunk in response) {
-          if (cancelled?.call() ?? false) throw DownloadException('已取消');
+          if (cancelled?.call() ?? false) throw DownloadException('Canceled');
           if (DateTime.now().isAfter(deadline)) {
-            throw DownloadException('下载超时');
+            throw DownloadException('Download timed out');
           }
           sink.add(chunk);
           received += chunk.length;
@@ -174,18 +175,20 @@ class Downloader {
       } finally {
         await sink.close();
       }
-      if (received == 0) throw DownloadException('下载内容为空');
+      if (received == 0) throw DownloadException('Download was empty');
 
       final content = await temp.readAsString();
-      if (content.trim().isEmpty) throw DownloadException('下载内容为空');
+      if (content.trim().isEmpty) throw DownloadException('Download was empty');
       final dynamic parsed;
       try {
         parsed = loadYaml(content);
       } on YamlException catch (error) {
-        throw DownloadException('订阅内容不是合法的 YAML：${error.message}');
+        throw DownloadException(
+            'Subscription returned invalid YAML: ${error.message}');
       }
       if (parsed is! YamlMap) {
-        throw DownloadException('订阅内容不是有效的 mihomo 配置');
+        throw DownloadException(
+            'Subscription did not return a valid Mihomo configuration.');
       }
 
       target.parent.createSync(recursive: true);
@@ -194,11 +197,11 @@ class Downloader {
       temp = null;
       return DownloadResult(bytes: received, info: userInfo);
     } on SocketException catch (error) {
-      throw DownloadException('网络错误：${error.message}');
+      throw DownloadException('Network error: ${error.message}');
     } on HandshakeException catch (error) {
-      throw DownloadException('TLS 握手失败：${error.message}');
+      throw DownloadException('TLS handshake failed: ${error.message}');
     } on TimeoutException {
-      throw DownloadException('连接超时');
+      throw DownloadException('Connection timed out');
     } finally {
       client.close(force: true);
       if (temp != null && temp.existsSync()) {

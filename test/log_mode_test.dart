@@ -8,7 +8,7 @@ void main() {
   });
 
   test('modes have labels', () {
-    expect(LogMode.standard.label, '标准');
-    expect(LogMode.compact.label, '精简');
+    expect(LogMode.standard.label, 'Standard');
+    expect(LogMode.compact.label, 'Compact');
   });
 }

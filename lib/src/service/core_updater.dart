@@ -25,7 +25,7 @@ class MirrorOption {
 }
 
 const List<MirrorOption> coreMirrors = [
-  MirrorOption('direct', '直连 GitHub', ''),
+  MirrorOption('direct', 'GitHub (direct)', ''),
   MirrorOption('ghproxy', 'ghproxy.net', 'https://ghproxy.net/'),
   MirrorOption('gh-proxy', 'gh-proxy.com', 'https://gh-proxy.com/'),
   MirrorOption('akams', 'github.akams.cn', 'https://github.akams.cn/'),
@@ -53,9 +53,13 @@ class MirrorProbe {
   final String? error;
 
   String get label {
-    if (!available) return error == null ? '不可用' : '不可用（$error）';
+    if (!available) {
+      return error == null ? 'Unavailable' : 'Unavailable ($error)';
+    }
     final ms = milliseconds ?? 0;
-    return ms >= 1000 ? '可用 ${(ms / 1000).toStringAsFixed(1)}s' : '可用 ${ms}ms';
+    return ms >= 1000
+        ? 'Available ${(ms / 1000).toStringAsFixed(1)}s'
+        : 'Available ${ms}ms';
   }
 }
 
@@ -207,27 +211,29 @@ class CoreUpdater {
       final body = await utf8.decoder.bind(response).join();
       if (response.statusCode != 200) {
         throw CoreUpdateException(
-          'GitHub API 返回 HTTP ${response.statusCode}（可能是网络或限流）',
+          'GitHub API returned HTTP ${response.statusCode}. Check connectivity and rate limits.',
         );
       }
       final decoded = jsonDecode(body);
-      if (decoded is! Map) throw CoreUpdateException('GitHub API 返回了无效数据');
+      if (decoded is! Map) {
+        throw CoreUpdateException('GitHub API returned invalid data.');
+      }
       final tag = decoded['tag_name'];
       final assets = decoded['assets'];
       if (tag is! String || assets is! List) {
-        throw CoreUpdateException('GitHub API 返回了无效数据');
+        throw CoreUpdateException('GitHub API returned invalid data.');
       }
       final picked = _pickAsset(tag, assets);
       if (picked == null) {
         throw CoreUpdateException(
-          '最新版本 $tag 中没有找到 $platformLabel 的 $archiveExtension 包',
+          'Release $tag has no $archiveExtension package for $platformLabel.',
         );
       }
       return picked;
     } on SocketException catch (error) {
-      throw CoreUpdateException('网络错误：${error.message}');
+      throw CoreUpdateException('Network error: ${error.message}');
     } on TimeoutException {
-      throw CoreUpdateException('请求 GitHub API 超时');
+      throw CoreUpdateException('GitHub API request timed out.');
     } finally {
       client.close(force: true);
     }
@@ -315,10 +321,12 @@ class CoreUpdater {
         if (received > 0) break;
       }
       stopwatch.stop();
-      if (received == 0) return const MirrorProbe.unavailable('没有数据');
+      if (received == 0) {
+        return const MirrorProbe.unavailable('No data received');
+      }
       return MirrorProbe.available(stopwatch.elapsedMilliseconds);
     } on TimeoutException {
-      return const MirrorProbe.unavailable('超时');
+      return const MirrorProbe.unavailable('Timed out');
     } on SocketException catch (error) {
       return MirrorProbe.unavailable(error.message);
     } catch (error) {
@@ -342,7 +350,9 @@ class CoreUpdater {
       cancelled: cancelled,
     );
     final binary = await _unpack(release.assetName, bytes);
-    if (binary.isEmpty) throw CoreUpdateException('下载的压缩包是空的');
+    if (binary.isEmpty) {
+      throw CoreUpdateException('The downloaded archive is empty.');
+    }
 
     final target = File(targetPath);
     target.parent.createSync(recursive: true);
@@ -361,7 +371,8 @@ class CoreUpdater {
       }
       final version = await _probeVersion(temp.path);
       if (version == null) {
-        throw CoreUpdateException('下载的内核无法运行，已保留原文件');
+        throw CoreUpdateException(
+            'The new core failed to run. The previous binary was kept.');
       }
       if (target.existsSync()) {
         try {
@@ -372,7 +383,8 @@ class CoreUpdater {
         try {
           target.deleteSync();
         } on FileSystemException {
-          throw CoreUpdateException('目标内核正在运行，无法替换：请先停止核心再更新');
+          throw CoreUpdateException(
+              'Stop the running core before replacing it.');
         }
       }
       try {
@@ -381,8 +393,8 @@ class CoreUpdater {
         final reason = error.osError?.message ?? error.message;
         throw CoreUpdateException(
           reason.toLowerCase().contains('busy')
-              ? '目标内核正在运行，无法替换：请先停止核心再更新'
-              : '替换内核失败：$reason',
+              ? 'Stop the running core before replacing it.'
+              : 'Could not replace the core: $reason',
         );
       }
       return CoreInstallResult(
@@ -434,7 +446,8 @@ class CoreUpdater {
       final response =
           await request.close().timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
-        throw CoreUpdateException('下载失败：HTTP ${response.statusCode}');
+        throw CoreUpdateException(
+            'Download failed: HTTP ${response.statusCode}');
       }
       final total = response.contentLength > 0
           ? response.contentLength
@@ -443,20 +456,20 @@ class CoreUpdater {
       var received = 0;
       final deadline = DateTime.now().add(const Duration(minutes: 5));
       await for (final chunk in response) {
-        if (cancelled?.call() ?? false) throw CoreUpdateException('已取消');
+        if (cancelled?.call() ?? false) throw CoreUpdateException('Canceled');
         if (DateTime.now().isAfter(deadline)) {
-          throw CoreUpdateException('下载超时');
+          throw CoreUpdateException('Download timed out');
         }
         builder.add(chunk);
         received += chunk.length;
         onProgress?.call(received, total);
       }
-      if (received == 0) throw CoreUpdateException('下载内容为空');
+      if (received == 0) throw CoreUpdateException('Download was empty');
       return builder.takeBytes();
     } on SocketException catch (error) {
-      throw CoreUpdateException('网络错误：${error.message}');
+      throw CoreUpdateException('Network error: ${error.message}');
     } on TimeoutException {
-      throw CoreUpdateException('下载超时');
+      throw CoreUpdateException('Download timed out');
     } finally {
       client.close(force: true);
     }

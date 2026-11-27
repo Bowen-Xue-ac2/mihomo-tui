@@ -228,8 +228,8 @@ class ConfirmOverlay extends Overlay {
     required this.title,
     required this.message,
     this.detail = const [],
-    this.confirmLabel = '确认',
-    this.cancelLabel = '取消',
+    this.confirmLabel = 'Confirm',
+    this.cancelLabel = 'Cancel',
     required this.onConfirm,
     this.danger = false,
   });
@@ -304,7 +304,7 @@ class ConfirmOverlay extends Overlay {
 
     painter.textAligned(
       Rect(rect.x, rect.bottom - 3, rect.width, 1),
-      'Enter 确认 | Esc 取消',
+      'Enter Confirm | Esc Cancel',
       Style(fg: theme.muted),
       center: true,
     );
@@ -376,7 +376,7 @@ class FormOverlay extends Overlay {
     required this.title,
     required this.fields,
     required this.onSubmit,
-    this.submitLabel = '确定',
+    this.submitLabel = 'OK',
     this.description = const [],
     this.onChanged,
   });
@@ -468,7 +468,7 @@ class FormOverlay extends Overlay {
         y,
         field.label +
             (field.required ? ' *' : '') +
-            (field.secret ? '（隐藏）' : ''),
+            (field.secret ? ' (hidden)' : ''),
         Style(fg: focused ? theme.text : theme.muted, bold: focused),
         maxWidth: rect.width - 6,
       );
@@ -552,7 +552,7 @@ class FormOverlay extends Overlay {
     painter.text(
       rect.x + 3,
       footerY,
-      'Tab 切换  Esc 取消',
+      'Tab Next field | Esc Cancel',
       Style(fg: theme.muted),
       maxWidth: buttonRect.x - rect.x - 4,
     );
@@ -595,7 +595,7 @@ class FormOverlay extends Overlay {
       if (field.kind == FieldKind.text) {
         final value = field.input.value.trim();
         if (field.required && value.isEmpty) {
-          _error = '「${field.label}」不能为空';
+          _error = 'Enter ${field.label}.';
           _focused = fields.indexOf(field);
           return;
         }
@@ -785,7 +785,7 @@ class InfoOverlay extends Overlay {
     painter.text(
       inner.x,
       rect.bottom - 2,
-      '上下 滚动 | PgUp/PgDn 翻页 | Esc 关闭',
+      '↑↓ Scroll | PgUp/PgDn Page | Esc Close',
       Style(fg: theme.muted),
     );
     painter.hit(inner, id: 'info', onWheel: (delta) {
@@ -845,7 +845,7 @@ class HelpOverlay extends Overlay {
   int _scroll = 0;
 
   @override
-  String get title => '快捷键';
+  String get title => 'Shortcuts';
 
   @override
   void draw(Painter painter) {
@@ -863,7 +863,7 @@ class HelpOverlay extends Overlay {
         : rows.length + 5;
     final rect = centeredRect(painter.width, painter.height, width, height);
     painter.fill(rect, Style(bg: theme.panelAlt));
-    painter.drawBox(rect, focused: true, title: '快捷键帮助');
+    painter.drawBox(rect, focused: true, title: 'Keyboard shortcuts');
     final inner = Rect(rect.x + 2, rect.y + 1, rect.width - 4, rect.height - 4);
     final maxScroll =
         rows.length > inner.height ? rows.length - inner.height : 0;
@@ -887,7 +887,7 @@ class HelpOverlay extends Overlay {
     painter.text(
       inner.x,
       rect.bottom - 2,
-      '上下 滚动 | Esc / ? 关闭',
+      '↑↓ Scroll | Esc / ? Close',
       Style(fg: theme.muted),
     );
     painter.hit(inner, id: 'help', onWheel: (delta) => _scroll += delta * 3);
@@ -951,7 +951,7 @@ class MirrorOverlay extends Overlay {
       math.max(0, coreMirrors.indexWhere((m) => m.id == current));
 
   @override
-  String get title => '下载镜像';
+  String get title => 'Download mirror';
 
   @override
   void draw(Painter painter) {
@@ -965,7 +965,7 @@ class MirrorOverlay extends Overlay {
     painter.text(
       rect.x + 3,
       y++,
-      '选择更新内核时使用的下载源',
+      'Choose the download source for core updates',
       Style(fg: theme.muted),
     );
     y++;
@@ -994,9 +994,9 @@ class MirrorOverlay extends Overlay {
       );
       final probe = probes[mirror.id];
       final status = probing(mirror.id)
-          ? '检测中~'
+          ? 'Checking...'
           : probe == null
-              ? '未检测'
+              ? 'Untested'
               : probe.label;
       final color = probing(mirror.id)
           ? theme.yellow
@@ -1026,14 +1026,14 @@ class MirrorOverlay extends Overlay {
     painter.text(
       rect.x + 3,
       footerY,
-      'Enter 选择 | r 重新检测 | Esc 关闭',
+      'Enter Select | r Retest | Esc Close',
       Style(fg: theme.muted),
     );
     // Blue accent for "github.com" hint line.
     painter.text(
       rect.x + 3,
       rect.bottom - 3,
-      truncate('镜像只影响内核下载，不会改动订阅下载代理', rect.width - 6),
+      truncate('The mirror applies only to core downloads.', rect.width - 6),
       Style(fg: theme.muted, dim: true),
     );
     painter.drawBox(rect, focused: true, title: title);

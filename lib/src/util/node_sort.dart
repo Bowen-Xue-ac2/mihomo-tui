@@ -5,9 +5,9 @@ import '../service/mihomo_api.dart';
 
 /// How the node column is ordered.
 enum NodeSortMode {
-  original('默认'),
-  delayAsc('延迟低到高'),
-  delayDesc('延迟高到低');
+  original('Default'),
+  delayAsc('Lowest latency first'),
+  delayDesc('Highest latency first');
 
   const NodeSortMode(this.label);
 

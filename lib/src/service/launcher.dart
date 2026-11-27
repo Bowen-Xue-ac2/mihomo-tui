@@ -67,12 +67,14 @@ echo $!
       final pid = int.tryParse(pidText.split('\n').last.trim());
       if (pid == null) {
         return LaunchResult(
-          error: stderrText.isEmpty ? '无法解析 mihomo 进程号' : stderrText,
+          error: stderrText.isEmpty
+              ? 'Could not read the Mihomo process ID.'
+              : stderrText,
         );
       }
       return LaunchResult(pid: pid);
     } on TimeoutException {
-      return const LaunchResult(error: '启动 mihomo 超时');
+      return const LaunchResult(error: 'Mihomo startup timed out.');
     } on ProcessException catch (error) {
       return LaunchResult(error: error.message);
     }
@@ -152,7 +154,7 @@ class WindowsLauncher implements ProcessLauncher {
       workingDirectory: workingDirectory,
     );
     if (pid == null) {
-      return const LaunchResult(error: 'CreateProcess 调用失败');
+      return const LaunchResult(error: 'CreateProcess failed.');
     }
     return LaunchResult(pid: pid);
   }

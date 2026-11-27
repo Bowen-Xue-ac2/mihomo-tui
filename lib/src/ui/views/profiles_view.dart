@@ -23,20 +23,20 @@ class ProfilesView extends View {
   int? _lastClickIndex;
 
   @override
-  String get label => '订阅';
+  String get label => 'Profiles';
 
   @override
-  String get title => '订阅配置';
+  String get title => 'Profiles';
 
   @override
   List<KeyHint> hints(AppContext app) => const [
-        KeyHint('Enter', '启用'),
-        KeyHint('a', '添加'),
-        KeyHint('u', '更新'),
-        KeyHint('r', '重命名'),
-        KeyHint('d', '删除'),
-        KeyHint('e', '订阅信息'),
-        KeyHint('E', '编辑 YAML'),
+        KeyHint('Enter', 'Enable'),
+        KeyHint('a', 'Add'),
+        KeyHint('u', 'Update'),
+        KeyHint('r', 'Rename'),
+        KeyHint('d', 'Delete'),
+        KeyHint('e', 'Profile details'),
+        KeyHint('E', 'Edit YAML'),
       ];
 
   @override
@@ -80,15 +80,15 @@ class ProfilesView extends View {
     final showPorts = listInner.width >= 55;
     final nameWidth = (listInner.width * 0.3).round().clamp(10, 24);
     final columns = [
-      ('名称', nameWidth),
-      ('节点', 5),
-      if (showPorts) ('端口', wide ? 12 : 8),
-      ('流量', listInner.width < 45 ? 10 : 13),
-      if (wide) ('更新', 11),
+      ('Name', nameWidth),
+      ('Nodes', 5),
+      if (showPorts) ('Ports', wide ? 12 : 8),
+      ('Traffic', listInner.width < 45 ? 10 : 13),
+      if (wide) ('Update', 11),
     ];
     final fixedWidth = columns.fold(2, (sum, column) => sum + column.$2 + 1);
     if (listInner.width - fixedWidth >= 10) {
-      columns.add(('订阅地址', listInner.width - fixedWidth));
+      columns.add(('ProfilesURL', listInner.width - fixedWidth));
     }
 
     final headerStyle = Style(fg: theme.muted, bg: theme.panel, bold: true);
@@ -128,11 +128,11 @@ class ProfilesView extends View {
       var columnX = rowRect.x + 2;
       for (final (label, width) in columns) {
         final value = switch (label) {
-          '名称' => active ? '* ${profile.name}' : profile.name,
-          '节点' => info?.nodeCount.toString() ?? '-',
-          '端口' => info?.portSummary.firstOrNull ?? '-',
-          '流量' => _trafficCell(profile),
-          '更新' => profile.updatedAt == null
+          'Name' => active ? '* ${profile.name}' : profile.name,
+          'Nodes' => info?.nodeCount.toString() ?? '-',
+          'Ports' => info?.portSummary.firstOrNull ?? '-',
+          'Traffic' => _trafficCell(profile),
+          'Update' => profile.updatedAt == null
               ? '-'
               : formatRelative(profile.updatedAt!),
           _ => profile.url,
@@ -142,9 +142,9 @@ class ProfilesView extends View {
           rowY,
           truncate(value, width),
           Style(
-            fg: label == '名称' && active ? theme.green : rowStyle.fg,
+            fg: label == 'Name' && active ? theme.green : rowStyle.fg,
             bg: rowStyle.bg,
-            bold: label == '名称' && (active || selected),
+            bold: label == 'Name' && (active || selected),
           ),
         );
         columnX += width + 1;
@@ -163,7 +163,7 @@ class ProfilesView extends View {
     painter.drawBox(
       listRect,
       focused: focused,
-      title: '订阅配置 (${profiles.length})',
+      title: 'Profiles (${profiles.length})',
     );
     if (showDetail) {
       final detailRect = Rect(
@@ -185,45 +185,45 @@ class ProfilesView extends View {
     final isActive = profile.name == app.repo.activeName;
     final rows = <(String, String, int?)>[];
     rows.add((
-      '状态',
-      isActive ? '当前使用' : '未启用',
+      'Status',
+      isActive ? 'Active' : 'Disabled',
       isActive ? theme.green : theme.muted,
     ));
     if (error != null) {
-      rows.add(('解析', error, theme.red));
+      rows.add(('Parse', error, theme.red));
     } else if (info != null) {
       rows.add((
-        '节点',
-        '${info.nodeCount} 个节点 | ${info.groupCount} 个代理组 | ${info.ruleCount} 条规则'
-            '${info.providerCount > 0 ? ' | ${info.providerCount} 个 provider' : ''}',
+        'Nodes',
+        '${info.nodeCount} nodes | ${info.groupCount} groups | ${info.ruleCount} rules'
+            '${info.providerCount > 0 ? ' | ${info.providerCount} providers' : ''}',
         null,
       ));
       rows.add((
-        '端口',
-        info.portSummary.isEmpty ? '未定义' : info.portSummary.join(' | '),
+        'Ports',
+        info.portSummary.isEmpty ? 'Not set' : info.portSummary.join(' | '),
         theme.accentSoft,
       ));
-      rows.add(_trafficRow(profile, app.theme) ?? ('流量', '-', null));
+      rows.add(_trafficRow(profile, app.theme) ?? ('Traffic', '-', null));
       rows.add((
-        '控制器',
-        '${info.controllerAddress ?? '未定义'} | 模式 ${info.mode}'
-            '${info.allowLan ? ' | 允许局域网' : ''}'
+        'Controller',
+        '${info.controllerAddress ?? 'Not set'} | Mode ${info.mode}'
+            '${info.allowLan ? ' | Allow LAN' : ''}'
             '${info.ipv6 ? ' | IPv6' : ''}',
         null,
       ));
     }
     rows.add((
-      '文件',
+      'File',
       '${app.repo.profileFile(profile.name)}'
           '${profile.size == null ? '' : ' | ${formatBytes(profile.size!)}'}',
       theme.muted,
     ));
     rows.add((
-      '更新',
-      profile.updatedAt == null ? '从未更新' : formatDateTime(profile.updatedAt!),
+      'Update',
+      profile.updatedAt == null ? 'Never' : formatDateTime(profile.updatedAt!),
       theme.muted,
     ));
-    rows.add(('地址', profile.url, theme.muted));
+    rows.add(('URL', profile.url, theme.muted));
     return rows;
   }
 
@@ -261,7 +261,7 @@ class ProfilesView extends View {
     painter.drawBox(
       rect,
       focused: focused,
-      title: '详情 | ${profile.name} | 点击查看全部',
+      title: 'Details | ${profile.name} | Click for full details',
     );
   }
 
@@ -294,7 +294,7 @@ class ProfilesView extends View {
             : fraction >= 0.7
                 ? theme.yellow
                 : theme.green;
-    return ('流量', summary.display, color);
+    return ('Traffic', summary.display, color);
   }
 
   void _drawEmpty(AppContext app, Painter painter, Rect area) {
@@ -303,19 +303,19 @@ class ProfilesView extends View {
     painter.text(
       box.x + 3,
       box.y + 2,
-      '按 a 添加第一个订阅，或 u 更新已有订阅。',
+      'Press a to add a profile or u to refresh one.',
       Style(fg: theme.text),
     );
     painter.text(
       box.x + 3,
       box.y + 3,
-      '订阅会保存到 ${app.paths.profilesDir}',
+      'Profiles are saved in ${app.paths.profilesDir}',
       Style(fg: theme.muted),
     );
     painter.text(
       box.x + 3,
       box.y + 4,
-      '启用后复制为 ${app.paths.mihomoConfigFile}',
+      'Activating a profile copies it to ${app.paths.mihomoConfigFile}',
       Style(fg: theme.muted),
     );
     painter.hit(
@@ -323,7 +323,7 @@ class ProfilesView extends View {
       id: 'add',
       onPress: () => unawaited(app.addProfileInteractive()),
     );
-    painter.drawBox(box, title: '订阅配置 | 还没有订阅');
+    painter.drawBox(box, title: 'Profiles | No profiles');
   }
 
   void _onRowPress(AppContext app, int index) {
@@ -400,23 +400,24 @@ class ProfilesView extends View {
     }
     if (event.isChar('d')) {
       app.confirm(
-        title: '删除订阅',
-        message: '确定删除「${profile.name}」吗？文件会一并删除。',
+        title: 'Delete profile',
+        message: 'Delete the profile ${profile.name} and its file?',
         detail: [
-          if (profile.name == app.repo.activeName) '这是当前启用的配置，删除后核心配置不会被改动。',
+          if (profile.name == app.repo.activeName)
+            'The running core will keep its current config.',
         ],
-        confirmLabel: '删除',
+        confirmLabel: 'Delete',
         danger: true,
         onConfirm: () {
           try {
             app.repo.delete(profile);
-            app.toast('已删除「${profile.name}」', level: ToastLevel.success);
+            app.toast('Deleted ${profile.name}', level: ToastLevel.success);
             _list.bind(
               total: app.repo.profiles.length,
               visible: _list.visible,
             );
           } catch (error) {
-            app.toast('删除失败：$error', level: ToastLevel.error);
+            app.toast('Delete failed: $error', level: ToastLevel.error);
           }
         },
       );
@@ -447,11 +448,11 @@ class ProfilesView extends View {
     app.showOverlay(
       FormOverlay(
         onChanged: app.requestFrame,
-        title: '重命名配置',
+        title: 'Rename profile',
         fields: [
           FormFieldSpec(
             key: 'name',
-            label: '新名称',
+            label: 'New name',
             initial: profile.name,
             required: true,
             validator: validateProfileName,
@@ -461,9 +462,9 @@ class ProfilesView extends View {
           final name = values['name']?.trim() ?? '';
           try {
             app.repo.rename(profile, name);
-            app.toast('已重命名为「$name」', level: ToastLevel.success);
+            app.toast('Renamed to $name', level: ToastLevel.success);
           } catch (error) {
-            app.toast('重命名失败：$error', level: ToastLevel.error);
+            app.toast('Rename failed: $error', level: ToastLevel.error);
           }
         },
       ),
@@ -474,34 +475,35 @@ class ProfilesView extends View {
     final info = app.repo.cachedInfo(profile.name);
     final error = app.repo.cachedError(profile.name);
     final lines = <String>[
-      '名称      ${profile.name}',
-      '状态      ${profile.name == app.repo.activeName ? '当前使用' : '未启用'}',
-      '文件      ${app.repo.profileFile(profile.name)}',
-      if (profile.size != null) '大小      ${formatBytes(profile.size!)}',
-      '更新      ${profile.updatedAt == null ? '从未更新' : formatDateTime(profile.updatedAt!)}',
-      '地址      ${profile.url}',
+      'Name      ${profile.name}',
+      'Status      ${profile.name == app.repo.activeName ? 'Active' : 'Disabled'}',
+      'File      ${app.repo.profileFile(profile.name)}',
+      if (profile.size != null) 'Size      ${formatBytes(profile.size!)}',
+      'Update      ${profile.updatedAt == null ? 'Never' : formatDateTime(profile.updatedAt!)}',
+      'URL      ${profile.url}',
       '',
     ];
     if (error != null) {
-      lines.add('解析失败  $error');
+      lines.add('Parse failed  $error');
     } else if (info != null) {
       lines.addAll([
-        '节点      ${info.nodeCount}',
-        '代理组    ${info.groupCount}',
-        '规则      ${info.ruleCount}',
+        'Nodes      ${info.nodeCount}',
+        'Proxy groups    ${info.groupCount}',
+        'Rules      ${info.ruleCount}',
         'Provider  ${info.providerCount}',
-        '模式      ${info.mode}',
-        '端口      ${info.portSummary.isEmpty ? '未定义' : info.portSummary.join(' | ')}',
-        '控制器    ${info.controllerAddress ?? '未定义'}',
-        '密钥      ${info.secret == null ? '未设置' : '已设置'}',
-        '允许局域网 ${info.allowLan ? '是' : '否'}',
-        'IPv6      ${info.ipv6 ? '是' : '否'}',
-        'TUN       ${info.tunEnabled ? '启用' : '未启用'}',
-        '日志级别  ${info.logLevel ?? 'info'}',
-        '面板      ${info.panelUrl ?? '无'}',
+        'Mode      ${info.mode}',
+        'Ports      ${info.portSummary.isEmpty ? 'Not set' : info.portSummary.join(' | ')}',
+        'Controller    ${info.controllerAddress ?? 'Not set'}',
+        'Secret      ${info.secret == null ? 'Not set' : 'Set'}',
+        'Allow LAN ${info.allowLan ? 'Yes' : 'No'}',
+        'IPv6      ${info.ipv6 ? 'Yes' : 'No'}',
+        'TUN       ${info.tunEnabled ? 'Enable' : 'Disabled'}',
+        'Log level  ${info.logLevel ?? 'info'}',
+        'Dashboard      ${info.panelUrl ?? 'None'}',
       ]);
     }
-    app.showOverlay(InfoOverlay(title: '配置信息 | ${profile.name}', lines: lines));
+    app.showOverlay(
+        InfoOverlay(title: 'Profile details | ${profile.name}', lines: lines));
   }
 
   @override

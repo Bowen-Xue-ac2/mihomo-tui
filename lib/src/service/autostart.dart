@@ -85,11 +85,13 @@ class Autostart {
         '/f',
       ]);
       return result == null
-          ? const AutostartResult(false, '写入注册表失败')
-          : const AutostartResult(true, '已加入 Windows 开机启动（登录时运行 mihomo）');
+          ? const AutostartResult(false, 'Failed to write registry settings.')
+          : const AutostartResult(
+              true, 'Mihomo will start at Windows sign-in.');
     }
     if (!Platform.isLinux) {
-      return const AutostartResult(false, '当前平台暂不支持开机自启');
+      return const AutostartResult(
+          false, 'Autostart is unavailable on this platform.');
     }
     final file = File(unitPath);
     file.parent.createSync(recursive: true);
@@ -111,7 +113,7 @@ LimitNOFILE=65535
 WantedBy=default.target
 ''');
     if (await _run('systemctl', ['--user', 'daemon-reload']) == null) {
-      return const AutostartResult(false, 'systemctl --user 不可用');
+      return const AutostartResult(false, 'systemctl --user Unavailable');
     }
     final enabled = await _run('systemctl', [
       '--user',
@@ -122,12 +124,12 @@ WantedBy=default.target
     if (enabled == null) {
       return AutostartResult(
         false,
-        '安装 systemd 用户服务失败，可手动执行：systemctl --user enable --now $unitName',
+        'Failed to install the systemd user service. To enable it manually, run systemctl --user enable --now $unitName',
       );
     }
     return AutostartResult(
       true,
-      '已启用 systemd 用户服务 $unitName（登录时自动启动 mihomo）',
+      'Enabled $unitName for Mihomo at sign-in.',
     );
   }
 
@@ -141,17 +143,18 @@ WantedBy=default.target
         '/f',
       ]);
       return result == null
-          ? const AutostartResult(false, '删除注册表项失败')
-          : const AutostartResult(true, '已移除 Windows 开机启动');
+          ? const AutostartResult(false, 'Failed to remove the registry entry.')
+          : const AutostartResult(true, 'Removed the Windows autostart entry.');
     }
     if (!Platform.isLinux) {
-      return const AutostartResult(false, '当前平台暂不支持开机自启');
+      return const AutostartResult(
+          false, 'Autostart is unavailable on this platform.');
     }
     await _run('systemctl', ['--user', 'disable', '--now', unitName]);
     final file = File(unitPath);
     if (file.existsSync()) file.deleteSync();
     await _run('systemctl', ['--user', 'daemon-reload']);
-    return AutostartResult(true, '已关闭开机自启（$unitName）');
+    return AutostartResult(true, 'Disabled autostart for $unitName.');
   }
 
   static Future<String?> _run(String executable, List<String> args) async {
