@@ -6,7 +6,7 @@ My Windows terminal client for Mihomo, based on [wzk0/mihomo-tui](https://github
 
 ```powershell
 vpn_x                              # Open the X console and start the core if needed
-vpn_x status --json                 # Core, profile, and controller state
+vpn_x status --json                 # Core state, mode, selected node, and delayMs
 vpn_x start
 vpn_x stop
 vpn_x restart
@@ -29,6 +29,8 @@ vpn_x tun off
 `vpn_x nodes <group>` numbers entries from 1 in the group's current order. The latency column shows the last result recorded by Mihomo. Entries without a result show `Untested`, and failed measurements can show `Timeout`. Run `vpn_x nodes <group>` again after refreshing or changing profiles, then pass the new number to `vpn_x use <group> <number>`.
 
 In Global mode, Overview shows the final selection reached through `GLOBAL`. In Direct mode, it shows `DIRECT`. In Rule mode, **MATCH fallback** shows the default route. Use Logs to see the rule and outbound chosen for an individual connection.
+
+`vpn_x status` uses the same route display and shows the node's last recorded delay. In JSON, `delayMs` is `null` when the delay is unavailable and `0` for a recorded timeout.
 
 ### Windows system proxy and TUN
 

@@ -11,6 +11,7 @@ import 'package:mihomo_tui/src/service/runtime.dart';
 import 'package:mihomo_tui/src/service/system_proxy.dart';
 import 'package:mihomo_tui/src/term/terminal.dart';
 import 'package:mihomo_tui/src/util/format.dart';
+import 'package:mihomo_tui/src/util/proxy_chain.dart';
 import 'package:mihomo_tui/src/ui/app.dart';
 import 'package:mihomo_tui/src/version.dart';
 import 'package:yaml/yaml.dart';
@@ -168,7 +169,7 @@ Non-interactive options:
                         Import legacy clash_tui data with data.json and config/
 
 Commands:
-  status [--json]       Show core status
+  status [--json]       Show core status, selected node and last latency
   start | stop | restart
                         Manage the core process
   nodes <group>           List node numbers, last latency, and current selection
@@ -620,13 +621,24 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
   final info = _readActiveInfo(runtime);
   var apiOnline = false;
   String? apiVersion;
+  String? mode;
+  String? node;
+  int? delayMs;
   if (info?.apiBase != null) {
     final api = MihomoApi(baseUrl: info!.apiBase!, secret: info.secret);
     try {
       apiVersion = await api.version();
       apiOnline = apiVersion != null;
+      if (apiOnline) {
+        mode = (await api.configs()).mode;
+        final snapshot =
+            mode == null || mode == 'direct' ? null : await api.proxies();
+        node = selectedOutbound(snapshot,
+            mode: mode, matchTarget: info.finalMatchTarget);
+        delayMs = snapshot?.nodes[node]?.delay;
+      }
     } on ApiException {
-      apiOnline = false;
+      // Report core and controller status even when route details are unavailable.
     } finally {
       api.dispose();
     }
@@ -646,6 +658,9 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
       'api': info?.controllerAddress,
       'apiOnline': apiOnline,
       'apiVersion': apiVersion,
+      'mode': mode,
+      'node': node,
+      'delayMs': delayMs,
     }));
   } else {
     stdout.writeln('$appName $appVersion (${Platform.operatingSystem} $_arch)');
@@ -653,6 +668,15 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
     stdout.writeln('  Core version  ${status.version ?? 'Unknown'}');
     stdout.writeln('  Status      ${status.running ? 'Running' : 'Stopped'}'
         '${status.pid == null ? '' : '(pid ${status.pid})'}');
+    final latency = switch (delayMs) {
+      null => node == null || mode == 'direct' ? '-' : 'Untested',
+      0 => 'Timeout',
+      final ms => '$ms ms',
+    };
+    stdout.writeln('  Mode        ${mode ?? '-'}');
+    final nodeLabel = mode == 'rule' ? 'MATCH fallback' : 'Node';
+    stdout.writeln('  ${nodeLabel.padRight(16)}${node ?? '-'}');
+    stdout.writeln('  Delay       $latency');
     stdout.writeln(
       '  Profile      ${runtime.repo.activeName ?? 'None'}'
       '${profile?.updatedAt == null ? '' : ' (updated ${formatDateTime(profile!.updatedAt!)})'}',
