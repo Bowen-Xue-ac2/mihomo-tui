@@ -390,8 +390,10 @@ class MihomoCore {
         final text = utf8.decode(bytes, allowMalformed: true);
         final all = text.split('\n');
         if (start > 0 && all.length > 1) all.removeAt(0);
-        final tail = all.length > lines ? all.sublist(all.length - lines) : all;
-        return tail.where((line) => line.trim().isNotEmpty).toList();
+        final entries = all.where((line) => line.trim().isNotEmpty).toList();
+        return entries.length > lines
+            ? entries.sublist(entries.length - lines)
+            : entries;
       } finally {
         raf.closeSync();
       }

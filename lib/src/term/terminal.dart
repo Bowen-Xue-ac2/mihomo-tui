@@ -1,4 +1,4 @@
-/// Terminal backend: raw mode, alternate screen, mouse reporting and events.
+/// Terminal backend: raw mode, alternate screen, and keyboard events.
 library;
 
 import 'dart:async';
@@ -34,7 +34,7 @@ abstract class TerminalBackend {
   Stream<TermEvent> get events;
   TermSize get size;
 
-  /// Applies raw mode / alternate screen / mouse reporting.
+  /// Applies raw mode and the alternate screen.
   void start();
 
   /// Restores the terminal to its original state.
@@ -175,7 +175,7 @@ class PosixTerminal implements TerminalBackend {
     stdout.write(
       '\x1b[?1049h'
       '\x1b[?25l'
-      '\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
+      '\x1b[?1003l\x1b[?1002l\x1b[?1006l\x1b[?1000l'
       '\x1b[2J\x1b[H',
     );
     _subscription = stdin.listen(
@@ -269,7 +269,7 @@ class PosixTerminal implements TerminalBackend {
     _safeWrite(
       '\x1b[?1049h'
       '\x1b[?25l'
-      '\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
+      '\x1b[?1003l\x1b[?1002l\x1b[?1006l\x1b[?1000l'
       '\x1b[2J\x1b[H',
     );
     _subscription?.resume();
@@ -319,7 +319,7 @@ class PosixTerminal implements TerminalBackend {
 }
 
 /// Windows console backend: ANSI output with VT processing enabled, input read
-/// through ReadConsoleInputW so that keys and mouse events are available.
+/// through ReadConsoleInputW for native keyboard events.
 class WindowsTerminal implements TerminalBackend {
   final _controller = StreamController<TermEvent>.broadcast();
   Timer? _timer;
@@ -402,7 +402,7 @@ class WindowsTerminal implements TerminalBackend {
         _originalInputMode = mode.value;
         win.setConsoleMode(
           _inputHandle,
-          enableExtendedFlags | enableWindowInput | enableMouseInput,
+          enableExtendedFlags | enableWindowInput,
         );
       }
       if (win.getConsoleMode(_outputHandle, mode) != 0) {
@@ -446,7 +446,7 @@ class WindowsTerminal implements TerminalBackend {
     _safeWrite(
       '\x1b[?1049h'
       '\x1b[?25l'
-      '\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
+      '\x1b[?1003l\x1b[?1002l\x1b[?1006l\x1b[?1000l'
       '\x1b[2J\x1b[H',
     );
     _timer = Timer.periodic(
@@ -494,48 +494,6 @@ class WindowsTerminal implements TerminalBackend {
       final event = _mapKey(vk, charCode, ctrl: ctrl, alt: alt, shift: shift);
       if (event != null) _controller.add(event);
       return;
-    }
-    if (type == 0x0002) {
-      final x = view.getInt16(base + 4, Endian.host);
-      final y = view.getInt16(base + 6, Endian.host);
-      final buttons = view.getUint32(base + 8, Endian.host);
-      final control = view.getUint32(base + 12, Endian.host);
-      final flags = view.getUint32(base + 16, Endian.host);
-      final shift = control & 0x0010 != 0;
-      final ctrl = control & 0x0008 != 0 || control & 0x0004 != 0;
-      final alt = control & 0x0002 != 0 || control & 0x0001 != 0;
-      if (flags & 0x0004 != 0) {
-        final delta = (buttons >> 16) & 0xffff;
-        final signed = delta >= 0x8000 ? delta - 0x10000 : delta;
-        _controller.add(MouseEvent(
-          kind: MouseKind.wheel,
-          x: x,
-          y: y,
-          wheelDelta: signed > 0 ? -1 : 1,
-          shift: shift,
-          ctrl: ctrl,
-          alt: alt,
-        ));
-        return;
-      }
-      final isMove = flags & 0x0001 != 0;
-      final kind = isMove ? MouseKind.move : MouseKind.press;
-      final button = buttons & 0x0001 != 0
-          ? MouseButton.left
-          : buttons & 0x0004 != 0
-              ? MouseButton.middle
-              : buttons & 0x0002 != 0
-                  ? MouseButton.right
-                  : MouseButton.none;
-      _controller.add(MouseEvent(
-        kind: kind,
-        x: x,
-        y: y,
-        button: button,
-        shift: shift,
-        ctrl: ctrl,
-        alt: alt,
-      ));
     }
   }
 
@@ -639,7 +597,7 @@ class WindowsTerminal implements TerminalBackend {
     _safeWrite(
       '\x1b[?1049h'
       '\x1b[?25l'
-      '\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
+      '\x1b[?1003l\x1b[?1002l\x1b[?1006l\x1b[?1000l'
       '\x1b[2J\x1b[H',
     );
   }

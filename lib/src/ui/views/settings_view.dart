@@ -165,8 +165,7 @@ class SettingsView extends View {
         action: true,
         onActivate: () => unawaited(app.refresh()),
       ),
-      _Row('About', '$appName $appVersion',
-          'Terminal interface with mouse and keyboard support',
+      _Row('About', '$appName $appVersion', 'Keyboard-only terminal interface',
           action: true, onActivate: () => _about(app)),
     ];
   }
@@ -328,14 +327,14 @@ class SettingsView extends View {
           'Core      ${app.coreStatus?.binaryPath ?? 'Not found'}',
           'Version      ${app.coreStatus?.version ?? 'Unknown'}',
           '',
-          'Keyboard and mouse',
-          '  | Click to select or scroll to browse',
+          'Keyboard controls',
+          '  | Use arrow keys to navigate and Enter to select',
           '  | Tab switches focus between navigation and content',
           '  | ? Show keyboard shortcuts',
           '',
           'Based on wzk0/mihomo-tui, the Dart rewrite of clash_tui.',
           'Uses Mihomo (Clash.Meta) with controller integration,',
-          'mouse input, and live logs.',
+          'keyboard controls, and live logs.',
         ],
       ),
     );

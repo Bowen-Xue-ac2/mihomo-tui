@@ -6,17 +6,23 @@ My Windows terminal client for Mihomo, based on [wzk0/mihomo-tui](https://github
 
 ```powershell
 vpn_x                              # Open the X console and start the core if needed
-vpn_x status --json                 # Core state, mode, selected node, and delayMs
+vpn_x status --json                 # Core, node, delay, TUN, and system proxy status
 vpn_x start
 vpn_x stop
 vpn_x restart
 vpn_x nodes GLOBAL                  # Node numbers, last latency, and current selection (*)
 vpn_x use GLOBAL 3                  # Select node 3 in the group
+vpn_x us list                       # Measure and list selectable US nodes
+vpn_x us 2                          # Pick US node 2 and retire the list
+vpn_x sg list                       # Measure and list selectable Singapore nodes
+vpn_x sg 1                          # Pick Singapore node 1 and retire the list
 vpn_x mode                          # Show the live routing mode
 vpn_x mode rule                     # rule, global, or direct
-vpn_x system-proxy status
-vpn_x system-proxy on
-vpn_x system-proxy off
+vpn_x proxy status
+vpn_x proxy on
+vpn_x proxy off
+vpn_x logs                         # Print the latest 50 log lines once
+vpn_x logs 100                     # Print up to 100 recent lines
 vpn_x tun status
 vpn_x tun on
 vpn_x tun off
@@ -28,6 +34,12 @@ vpn_x tun off
 
 `vpn_x nodes <group>` numbers entries from 1 in the group's current order. The latency column shows the last result recorded by Mihomo. Entries without a result show `Untested`, and failed measurements can show `Timeout`. Run `vpn_x nodes <group>` again after refreshing or changing profiles, then pass the new number to `vpn_x use <group> <number>`.
 
+`vpn_x us list` and `vpn_x sg list` measure matching nodes before numbering them, with successful results ordered by delay. The list uses `GLOBAL` in Global mode or the selectable MATCH group in Rule mode. Only the latest regional list is usable. A valid numbered choice retires the entire list. If the mode or profile changes, list again before choosing. Direct mode uses the direct outbound.
+
+![Windows PowerShell showing measured US nodes, a numbered selection, and the expired list message](screenshot/regional-cli-windows.png)
+
+The screenshot uses sample node names and delays from a test controller.
+
 In Global mode, Overview shows the final selection reached through `GLOBAL`. In Direct mode, it shows `DIRECT`. In Rule mode, **MATCH fallback** shows the default route. Use Logs to see the rule and outbound chosen for an individual connection.
 
 `vpn_x status` uses the same route display and shows the node's last recorded delay. In JSON, `delayMs` is `null` when the delay is unavailable and `0` for a recorded timeout.
@@ -36,9 +48,15 @@ In Global mode, Overview shows the final selection reached through `GLOBAL`. In 
 
 The system proxy and TUN have independent controls. Release each one in the existing client before enabling it with `vpn_x`. The Windows TUN adapter is named `vpn_x`.
 
+`vpn_x proxy` is shorthand for `vpn_x system-proxy`. `vpn_x logs [lines]` reads up to the requested number of entries from the newest 256 KiB of the core log and exits.
+
+`vpn_x status` shows both controls. JSON reports `tun` as a boolean (or `null` when unknown), `tunDevice` when available, and `systemProxy` using the same ownership labels as `vpn_x system-proxy status`.
+
 To enable TUN, run `vpn_x start` in an Administrator terminal, then run `vpn_x tun on`. If the core is already running without elevation, use `vpn_x restart` in that Administrator terminal before retrying. TUN and routing-mode changes apply to the running core. Run `vpn_x tun on` again after restarting the core.
 
-## Keys
+## Keyboard controls
+
+The proxy page highlights the full cursor row in the focused column. An asterisk marks the connected node.
 
 | Key | Action |
 | --- | --- |

@@ -16,6 +16,8 @@ import 'package:mihomo_tui/src/ui/app.dart';
 import 'package:mihomo_tui/src/version.dart';
 import 'package:yaml/yaml.dart';
 
+import 'regional_selection.dart';
+
 Future<void> main(List<String> arguments) async {
   final options = _CliOptions.parse(arguments);
   if (options.error != null) {
@@ -52,6 +54,17 @@ Future<void> main(List<String> arguments) async {
       proxyCommand,
       options.proxyArguments,
     );
+    return;
+  }
+
+  final logLines = options.logLines;
+  if (logLines != null) {
+    final lines = runtime.core.readLogTail(lines: logLines);
+    if (lines.isEmpty) {
+      stderr.writeln('No Mihomo log entries available.');
+    } else {
+      stdout.writeln(lines.join('\n'));
+    }
     return;
   }
 
@@ -169,21 +182,26 @@ Non-interactive options:
                         Import legacy clash_tui data with data.json and config/
 
 Commands:
-  status [--json]       Show core status, selected node and last latency
+  status [--json]       Show core, node, latency, TUN, and system proxy status
   start | stop | restart
                         Manage the core process
   nodes <group>           List node numbers, last latency, and current selection
   use <group> <number>    Select a node by its number in the group
+  us list | sg list     Test and number nodes for the current routing mode
+  us <number> | sg <number>
+                        Select from the latest list and discard its numbers
   mode [rule|global|direct]
                         Show or change the running mode
   system-proxy [status|on|off]
                         Manage the system proxy separately from TUN
+  proxy [status|on|off] Alias for system-proxy
+  logs [lines]          Print recent Mihomo logs once (default: 50 lines)
   tun [status|on|off]   Manage the running core's TUN adapter
   Put --data, --home and --bin before the command.
 
 Interactive keys:
   Tab focus   ↑↓ navigate   Enter select   ? help   q quit
-  1–5 switch pages   Mouse click and scroll are supported
+  1–5 switch pages   Keyboard controls only
 ''';
 
 class _CliOptions {
@@ -209,6 +227,7 @@ class _CliOptions {
   String? editor;
   String? error;
   String? proxyCommand;
+  int? logLines;
   List<String> proxyArguments = const [];
 
   static _CliOptions parse(List<String> arguments) {
@@ -269,19 +288,29 @@ class _CliOptions {
           options.restart = true;
         case 'nodes':
         case 'use':
+        case 'us':
+        case 'sg':
         case 'mode':
+        case 'proxy':
         case 'system-proxy':
         case 'tun':
           final values = arguments.sublist(index + 1);
           final error = switch (arg) {
             'nodes' when values.length != 1 => 'Usage: nodes <group>',
             'use' when values.length != 2 => 'Usage: use <group> <number>',
+            'us' ||
+            'sg'
+                when values.length != 1 ||
+                    (values.single != 'list' &&
+                        (int.tryParse(values.single, radix: 10) ?? 0) < 1) =>
+              'Usage: $arg list | $arg <positive number>',
             'mode'
                 when values.length > 1 ||
                     (values.isNotEmpty &&
                         !const ['rule', 'global', 'direct']
                             .contains(values.single.toLowerCase())) =>
               'Usage: mode [rule|global|direct]',
+            'proxy' ||
             'system-proxy' ||
             'tun'
                 when values.length > 1 ||
@@ -292,8 +321,18 @@ class _CliOptions {
             _ => null,
           };
           options.error ??= error;
-          options.proxyCommand = arg;
+          options.proxyCommand = arg == 'proxy' ? 'system-proxy' : arg;
           options.proxyArguments = values;
+          return options;
+        case 'logs':
+          final values = arguments.sublist(index + 1);
+          final lines =
+              values.isEmpty ? 50 : int.tryParse(values.first, radix: 10);
+          if (values.length > 1 || lines == null || lines < 1) {
+            options.error = 'Usage: logs [positive line count]';
+          } else {
+            options.logLines = lines;
+          }
           return options;
         case '--bin':
           options.binary = nextValue(index);
@@ -368,6 +407,16 @@ Future<int> _runProxyCommand(
   }
   final api = MihomoApi(baseUrl: base, secret: info?.secret);
   try {
+    if (command == 'us' || command == 'sg') {
+      await runRegionalSelection(
+        api: api,
+        paths: runtime.paths,
+        matchTarget: info?.finalMatchTarget,
+        region: command,
+        number: int.tryParse(arguments.single, radix: 10),
+      );
+      return 0;
+    }
     if (command == 'tun') {
       return await _runTun(runtime, api, arguments.firstOrNull ?? 'status');
     }
@@ -432,16 +481,18 @@ Future<int> _runProxyCommand(
   }
 }
 
+String _systemProxyLabel(SystemProxyState state, bool owned) => switch (state) {
+      SystemProxyState.enabled => owned ? 'vpn_x' : 'another app',
+      SystemProxyState.disabled => 'off',
+      _ => state.name,
+    };
+
 Future<int> _runSystemProxy(ProfileInfo? info, String action) async {
   final port = info?.mixedPort ?? info?.port;
   final state = await SystemProxy.currentState();
   final owned = port != null && await SystemProxy.pointsToLoopback(port);
   if (action == 'status') {
-    stdout.writeln(switch (state) {
-      SystemProxyState.enabled => owned ? 'vpn_x' : 'another app',
-      SystemProxyState.disabled => 'off',
-      _ => state.name,
-    });
+    stdout.writeln(_systemProxyLabel(state, owned));
     return 0;
   }
   if (state == SystemProxyState.enabled && !owned) {
@@ -624,13 +675,18 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
   String? mode;
   String? node;
   int? delayMs;
+  bool? tun;
+  String? tunDevice;
   if (info?.apiBase != null) {
     final api = MihomoApi(baseUrl: info!.apiBase!, secret: info.secret);
     try {
       apiVersion = await api.version();
       apiOnline = apiVersion != null;
       if (apiOnline) {
-        mode = (await api.configs()).mode;
+        final config = await api.configs();
+        mode = config.mode;
+        tun = config.tunEnabled;
+        tunDevice = tun == true ? config.tunDevice : null;
         final snapshot =
             mode == null || mode == 'direct' ? null : await api.proxies();
         node = selectedOutbound(snapshot,
@@ -643,6 +699,15 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
       api.dispose();
     }
   }
+  if (!status.running && !apiOnline) tun = false;
+  final proxyState = await SystemProxy.currentState();
+  final proxyPort = info?.mixedPort ?? info?.port;
+  final systemProxy = _systemProxyLabel(
+    proxyState,
+    proxyState == SystemProxyState.enabled &&
+        proxyPort != null &&
+        await SystemProxy.pointsToLoopback(proxyPort),
+  );
   if (json) {
     stdout.writeln(const JsonEncoder.withIndent('  ').convert({
       'app': appName,
@@ -661,6 +726,9 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
       'mode': mode,
       'node': node,
       'delayMs': delayMs,
+      'tun': tun,
+      'tunDevice': tunDevice,
+      'systemProxy': systemProxy,
     }));
   } else {
     stdout.writeln('$appName $appVersion (${Platform.operatingSystem} $_arch)');
@@ -677,6 +745,13 @@ Future<int> _printStatus(Runtime runtime, {required bool json}) async {
     final nodeLabel = mode == 'rule' ? 'MATCH fallback' : 'Node';
     stdout.writeln('  ${nodeLabel.padRight(16)}${node ?? '-'}');
     stdout.writeln('  Delay       $latency');
+    final tunLabel = switch (tun) {
+      true => tunDevice == null ? 'on' : 'on ($tunDevice)',
+      false => 'off',
+      null => 'unknown',
+    };
+    stdout.writeln('  TUN         $tunLabel');
+    stdout.writeln('  System proxy  $systemProxy');
     stdout.writeln(
       '  Profile      ${runtime.repo.activeName ?? 'None'}'
       '${profile?.updatedAt == null ? '' : ' (updated ${formatDateTime(profile!.updatedAt!)})'}',

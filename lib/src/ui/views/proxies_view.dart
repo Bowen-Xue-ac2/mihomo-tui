@@ -13,6 +13,7 @@ import '../app_context.dart';
 import '../list_state.dart';
 import '../overlay.dart';
 import '../painter.dart';
+import '../theme.dart';
 import 'view.dart';
 
 class ProxiesView extends View {
@@ -118,47 +119,34 @@ class ProxiesView extends View {
     _groupList.ensureVisible();
     final visibleGroups =
         math.min(listHeight, snapshot.groups.length - _groupList.scroll);
+    final highlight = theme.selection ??
+        (theme.isLight ? Theme.light.selection : Theme.dark.selection);
     for (var row = 0; row < visibleGroups; row++) {
       final index = _groupList.scroll + row;
       final item = snapshot.groups[index];
       final isActiveGroup = index == _groupList.selected;
+      final cursor = focused && _pane == 0 && isActiveGroup;
       final rowRect =
           Rect(leftRect.x + 1, leftRect.y + 1 + row, leftRect.width - 2, 1);
       final style = Style(
         fg: isActiveGroup ? theme.text : theme.muted,
-        bg: theme.panel,
+        bg: cursor ? highlight : theme.panel,
         bold: isActiveGroup,
       );
+      if (cursor) painter.fill(rowRect, style);
       // The `>` marker tracks the group currently shown on the right, so the
       // cursor stays visible while the node column is focused.
       painter.text(
         rowRect.x,
         rowRect.y,
         isActiveGroup ? '>' : ' ',
-        Style(fg: theme.accent, bg: theme.panel, bold: isActiveGroup),
+        Style(fg: theme.accent, bg: style.bg, bold: isActiveGroup),
       );
       painter.text(
         rowRect.x + 2,
         rowRect.y,
         truncate(item.name, rowRect.width - 4),
         style,
-      );
-      painter.hit(
-        rowRect,
-        id: 'group$index',
-        onHover: () {
-          if (_groupList.selected != index) {
-            _groupList.select(index);
-            _nodeList.reset();
-          }
-          _pane = 0;
-        },
-        onPress: () {
-          _groupList.select(index);
-          _nodeList.reset();
-          _pane = 0;
-        },
-        onWheel: _groupList.wheel,
       );
     }
 
@@ -178,11 +166,11 @@ class ProxiesView extends View {
       final name = nodes[index];
       final node = snapshot.nodes[name];
       final isNow = group.now == name;
-      final selected = index == _nodeList.selected;
+      final selected = focused && _pane == 1 && index == _nodeList.selected;
       final rowRect =
           Rect(innerRight.x, innerRight.y + row, innerRight.width, 1);
       final style = selected
-          ? theme.selectionStyle()
+          ? Style(fg: theme.text, bg: highlight, bold: true)
           : Style(fg: theme.text, bg: theme.panel);
       painter.fill(rowRect, style);
       painter.text(
@@ -231,21 +219,6 @@ class ProxiesView extends View {
         rowRect.y,
         padLeft(delayText, delayWidth - 1),
         Style(fg: delayColor, bg: style.bg),
-      );
-      painter.hit(
-        rowRect,
-        id: 'node$index',
-        onHover: () {
-          _nodeList.select(index);
-          _pane = 1;
-        },
-        onPress: () {
-          _nodeList.select(index);
-          _pane = 1;
-          // Clicking a node switches to it directly.
-          unawaited(_select(app, group.name, name));
-        },
-        onWheel: _nodeList.wheel,
       );
     }
 

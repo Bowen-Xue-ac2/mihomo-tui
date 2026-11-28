@@ -62,13 +62,12 @@ class App implements AppContext {
 
   Theme _theme = Theme.dark;
   bool? _lightBackground;
-  String? _hoverId;
 
   @override
   Theme get theme => _theme;
 
   @override
-  String? get hoverId => _hoverId;
+  String? get hoverId => null;
 
   @override
   late AppPaths paths;
@@ -86,8 +85,6 @@ class App implements AppContext {
 
   late Screen _screen;
   final ScreenRenderer _renderer = ScreenRenderer();
-  List<Hit> _hits = const [];
-  Overlay? _paintedOverlay;
   bool _dirty = true;
   bool _exiting = false;
   bool _editing = false;
@@ -336,14 +333,12 @@ class App implements AppContext {
   void _render() {
     _dirty = false;
     _overlays.removeWhere((overlay) => overlay.isDismissed);
-    _paintedOverlay = _overlays.lastOrNull;
     final p = Painter(_screen, theme);
     final width = _screen.width;
     final height = _screen.height;
     _screen.fillRect(0, 0, width, height, Style(bg: theme.background));
     if (width < 40 || height < 10) {
       p.text(1, 1, 'Terminal too small (minimum 40x10)', Style(fg: theme.red));
-      _hits = List<Hit>.unmodifiable(p.hits);
       terminal.write(_renderer.render(_screen));
       return;
     }
@@ -367,13 +362,11 @@ class App implements AppContext {
     }
     _drawBottomBar(p, width, height);
 
-    final modal = _paintedOverlay;
+    final modal = _overlays.lastOrNull;
     if (modal != null) {
-      p.hits.clear();
       modal.draw(p);
     }
 
-    _hits = List<Hit>.unmodifiable(p.hits);
     terminal.write(_renderer.render(_screen));
   }
 
@@ -434,17 +427,12 @@ class App implements AppContext {
       final view = views[index];
       final selected = index == _viewIndex;
       final rowRect = Rect(rect.x + 1, y, rect.width - 2, 1);
-      final hoveringNav = _hoverId != null && _hoverId!.startsWith('nav');
-      final hovered = _hoverId == 'nav$index';
       final style = Style(
-        fg: selected ? theme.accentSoft : (hovered ? theme.text : theme.muted),
+        fg: selected ? theme.accentSoft : theme.muted,
         bg: theme.panel,
-        bold: selected || hovered,
+        bold: selected,
       );
-      // The '>' marker follows the mouse while hovering the sidebar, but the
-      // displayed page only changes on click.
-      final cursor = hoveringNav ? hovered : selected;
-      if (cursor) {
+      if (selected) {
         p.text(rect.x + 1, y, '>', Style(fg: theme.accent, bg: theme.panel));
       }
       p.text(innerX + 1, y, truncate(view.label, innerWidth), style);
@@ -457,8 +445,6 @@ class App implements AppContext {
       p.hit(
         rowRect,
         id: 'nav$index',
-        // Hover only highlights the entry; it must not switch pages.
-        onHover: () {},
         onPress: () {
           _viewIndex = index;
           _sidebarFocused = false;
@@ -564,14 +550,13 @@ class App implements AppContext {
     if (_editing || _exiting) return;
     switch (event) {
       case ResizeEvent(:final columns, :final rows):
-        _hits = const [];
         _screen.resize(columns, rows);
         _renderer.invalidate();
         _dirty = true;
       case KeyEvent():
         _handleKey(event);
       case MouseEvent():
-        _handleMouse(event);
+        break;
       case ColorReportEvent(
           red: final red,
           green: final green,
@@ -652,53 +637,6 @@ class App implements AppContext {
     }
   }
 
-  void _handleMouse(MouseEvent event) {
-    final modal = _overlays.lastOrNull;
-    if (modal != _paintedOverlay || modal?.isDismissed == true) return;
-
-    if (event.kind == MouseKind.move) {
-      _handleHover(event);
-      return;
-    }
-
-    if (event.kind == MouseKind.wheel) {
-      for (final hit in _hits.reversed) {
-        if (hit.onWheel != null && hit.rect.contains(event.x, event.y)) {
-          hit.onWheel!(event.wheelDelta);
-          _dirty = true;
-          return;
-        }
-      }
-      if (modal == null) views[_viewIndex].onWheel(this, event.wheelDelta);
-      _dirty = true;
-      return;
-    }
-    if (event.kind == MouseKind.press && event.button == MouseButton.left) {
-      for (final hit in _hits.reversed) {
-        if (hit.onPress != null && hit.rect.contains(event.x, event.y)) {
-          hit.onPress!();
-          _dirty = true;
-          return;
-        }
-      }
-    }
-    if (modal?.handleMouse(event) == true) _dirty = true;
-  }
-
-  void _handleHover(MouseEvent event) {
-    Hit? target;
-    for (final hit in _hits.reversed) {
-      if (hit.onHover != null && hit.rect.contains(event.x, event.y)) {
-        target = hit;
-        break;
-      }
-    }
-    if (target?.id == _hoverId) return;
-    _hoverId = target?.id;
-    target?.onHover?.call();
-    _dirty = true;
-  }
-
   /// Terminals can report a stale size right after a resize (or miss the
   /// signal entirely); re-checking keeps the frame in sync with the window,
   /// otherwise long lines wrap and look like broken borders.
@@ -711,7 +649,6 @@ class App implements AppContext {
   }
 
   void _syncView() {
-    _hoverId = null;
     _tickView();
     _dirty = true;
     unawaited(_refreshServices());
@@ -736,7 +673,7 @@ class App implements AppContext {
           KeyHint('?', 'Toggle keyboard shortcuts'),
           KeyHint('h', 'Hide the interface, keep the core running'),
           KeyHint('q', 'Quit the interface'),
-          KeyHint('↑↓ / Wheel', 'Navigate or scroll'),
+          KeyHint('↑↓', 'Navigate or scroll'),
           KeyHint('Enter', 'Confirm or run'),
           KeyHint('Esc', 'Cancel or back'),
           KeyHint('Ctrl+C / V', 'Copy or paste in a text field'),
@@ -756,7 +693,6 @@ class App implements AppContext {
           KeyHint('e', 'Edit the profile name and URL'),
           KeyHint('E', 'Edit the YAML in profiles/<name>.yaml'),
           KeyHint('i', 'View profile details'),
-          KeyHint('Double-click', 'Activate profile'),
         ],
       ),
       (
@@ -819,7 +755,6 @@ class App implements AppContext {
 
   @override
   void showOverlay(Overlay overlay) {
-    _hoverId = null;
     _overlays.add(overlay);
     _dirty = true;
   }

@@ -261,7 +261,7 @@ class ProfilesView extends View {
     painter.drawBox(
       rect,
       focused: focused,
-      title: 'Details | ${profile.name} | Click for full details',
+      title: 'Details | ${profile.name} | i for full details',
     );
   }
 

@@ -15,7 +15,6 @@ const int enableProcessedInput = 0x0001;
 const int enableLineInput = 0x0002;
 const int enableEchoInput = 0x0004;
 const int enableWindowInput = 0x0008;
-const int enableMouseInput = 0x0010;
 const int enableInsertMode = 0x0020;
 const int enableQuickEditMode = 0x0040;
 const int enableExtendedFlags = 0x0080;
